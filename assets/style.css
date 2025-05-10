@@ -1,168 +1,379 @@
-/* Main styles for the Antigen Dashboard */
-
-/* Body and general styling */
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 20px;
-    background-color: #fafafa;
-    color: #333;
+/* Main color variables */
+:root {
+    --primary-color: #2e8bc0;
+    --secondary-color: #145da0;
+    --success-color: #2d6a4f;
+    --warning-color: #ffd166;
+    --danger-color: #e63946;
+    --light-color: #f8f9fa;
+    --dark-color: #212529;
+    --border-color: #dee2e6;
 }
 
-/* Container styling */
-.container {
+/* Base styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f5f7f9;
+    color: var(--dark-color);
+}
+
+.dashboard-container {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 0 15px;
+    padding: 20px;
 }
 
-/* Header styling */
-h1, h2, h3, h4, h5, h6 {
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-h1 {
-    text-align: center;
-    margin-bottom: 30px;
-    padding-bottom: 15px;
-    border-bottom: 2px solid #eaeaea;
-}
-
-/* Step indicator */
-.step-indicator {
+/* Header styles */
+.dashboard-header {
     display: flex;
-    justify-content: space-around;
-    margin-bottom: 30px;
-    padding: 15px 0;
-}
-
-.step-item {
-    text-align: center;
-    position: relative;
-    flex: 1;
-}
-
-.step-item:not(:last-child):after {
-    content: '';
-    position: absolute;
-    top: 15px;
-    right: -50%;
-    width: 100%;
-    height: 2px;
-    background-color: #ddd;
-    z-index: 0;
-}
-
-.step {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background-color: #ddd;
-    color: #333;
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    margin: 0 auto 5px auto;
-    font-weight: bold;
-    position: relative;
-    z-index: 1;
-}
-
-.step.active {
-    background-color: #4CAF50;
-    color: white;
-}
-
-.step.completed {
-    background-color: #4CAF50;
-    color: white;
-}
-
-.step-label {
-    font-size: 14px;
-    color: #555;
-}
-
-/* Table styling */
-.dash-table-container {
     margin-bottom: 20px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    border-radius: 4px;
-    overflow: hidden;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
 }
 
-.dash-header {
-    background-color: #f8f9fa !important;
-    font-weight: bold !important;
-    border-bottom: 2px solid #ddd !important;
+.dashboard-title {
+    margin: 0;
+    color: var(--secondary-color);
 }
 
-.dash-cell {
-    text-align: center !important;
-    font-size: 14px !important;
-    padding: 8px !important;
+/* Main content area */
+.main-content {
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    padding: 25px;
+    margin-bottom: 20px;
 }
 
-/* Buttons */
-.button {
+.step-title {
+    color: var(--secondary-color);
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 8px;
+    margin-bottom: 20px;
+}
+
+.section-title {
+    color: var(--secondary-color);
+    margin-top: 25px;
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+/* Button styles */
+.action-button {
     padding: 10px 20px;
-    font-size: 16px;
     border: none;
-    border-radius: 5px;
+    border-radius: 4px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    font-weight: 500;
+    transition: background-color 0.2s;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 0 5px;
 }
 
-.button:hover {
-    opacity: 0.8;
-}
-
-.button:active {
-    transform: translateY(1px);
-}
-
-.button.primary {
-    background-color: #4CAF50;
+.primary {
+    background-color: var(--primary-color);
     color: white;
 }
 
-.button.secondary {
-    background-color: #f8f9fa;
-    color: black;
-    border: 1px solid #ddd;
+.primary:hover {
+    background-color: var(--secondary-color);
 }
 
-.button.blue {
-    background-color: #007BFF;
-    color: white;
+.secondary {
+    background-color: white;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
 }
 
-/* Legend */
-.legend-container {
-    margin: 20px 0;
-    padding: 15px;
-    border-radius: 5px;
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
+.secondary:hover {
+    background-color: #f0f7ff;
 }
 
-.legend-item {
-    display: inline-flex;
-    align-items: center;
-    margin-right: 15px;
+.upload-button {
+    background-color: var(--light-color);
+    color: var(--dark-color);
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.upload-button:hover {
+    background-color: #e9ecef;
+}
+
+/* Panel input styles */
+.panel-input {
     margin-bottom: 10px;
 }
 
-.legend-color {
-    width: 20px;
-    height: 20px;
-    display: inline-block;
-    margin-right: 5px;
-    border-radius: 3px;
+.panel-input label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
 }
 
-/* Checkboxes */
-.column-checkbox-container {
+.panel-input input {
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    width: 200px;
+}
+
+/* Progress Stepper styles */
+.stepper-container {
+    margin: 20px 0 30px;
+    padding: 10px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.stepper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 40px;
+}
+
+.stepper-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    text-align: center;
+}
+
+.step-circle {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background-color: #e9ecef;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: #495057;
+    border: 2px solid #ced4da;
+}
+
+.step-circle.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.step-circle.completed {
+    background-color: var(--success-color);
+    color: white;
+    border-color: var(--success-color);
+}
+
+.step-label {
+    font-size: 0.9em;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.step-line {
+    flex: 1;
+    height: 2px;
+    background-color: #e9ecef;
+    margin: 0 5px;
+}
+
+.step-line.active {
+    background-color: var(--primary-color);
+}
+
+/* Tooltips */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    cursor: help;
+    border-bottom: 1px dotted #888;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: #333;
+    color: #fff;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Welcome page styles */
+.welcome-title {
+    color: var(--secondary-color);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.welcome-container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.welcome-text {
+    font-size: 1.1em;
+    line-height: 1.5;
+    margin-bottom: 20px;
+}
+
+.steps-list {
+    margin: 20px 0;
+    padding-left: 20px;
+}
+
+.steps-list li {
+    margin-bottom: 10px;
+    line-height: 1.5;
+}
+
+.start-instructions {
+    margin: 20px 0;
+}
+
+.start-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 30px 0;
+}
+
+.data-info {
+    background-color: var(--light-color);
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 30px;
+}
+
+/* Step 2 specific styles */
+.legend-container {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.exclusion-details-container {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
     max-height: 200px;
-    overflow-y
+    overflow-y: auto;
+}
+
+/* Step 3 specific styles */
+.excluded-antigens-section {
+    margin-top: 20px;
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+}
+
+.excluded-antigens-list {
+    font-weight: 500;
+    color: var(--danger-color);
+}
+
+/* DataTable customizations */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td, 
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+    border: 1px solid var(--border-color);
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header-name {
+    font-weight: bold;
+}
+
+.dash-table-container .dash-spreadsheet-container {
+    font-size: 14px;
+}
+
+/* Make dropdown inputs in table more visible */
+.Select-control {
+    border: 1px solid #b8daff !important;
+}
+
+.Select-value {
+    background-color: #f0f7ff !important;
+}
+
+/* Make sure checkboxes are visible and properly aligned */
+input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .header-actions {
+        margin-top: 10px;
+    }
+    
+    .stepper {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .stepper-step {
+        flex-direction: row;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .step-circle {
+        margin-right: 10px;
+        margin-bottom: 0;
+    }
+    
+    .step-line {
+        width: 2px;
+        height: 20px;
+        margin: 5px 0;
+    }
+    
+    .start-actions {
+        flex-direction: column;
+    }
+    
+    .start-actions > * {
+        margin: 5px 0;
+    }
+    
+    .panel-input input {
+        width: 100%;
+    }
+}
