@@ -54,11 +54,6 @@ def prepare_data(df):
     
     return df
 
-
-
-
-########################### start of part 2 ######################################################
-
 # --- Analysis function ---
 def analyze_data(df):
     """Analyze the data to determine antigen status"""
@@ -142,16 +137,9 @@ def analyze_data(df):
     
     return status_map, exclusion_reasons, system_excluded
 
-
-
-########################### end of part 2 ######################################################
-
-
-########################### start of part 3 ######################################################
-
 # --- LISS Selection Table (Step 1) ---
 def build_liss_table(df):
-    """Build the data table for LISS selection in Step 1"""
+    """Build the data table for LISS selection in Step 1 with working dropdowns"""
     df = prepare_data(df)
     
     # Drop Spendernummer column for Step 1 as requested
@@ -164,18 +152,23 @@ def build_liss_table(df):
         col_def = {
             "name": col,
             "id": col,
-            "editable": col == "LISS" or col == "Spez. Antigen"  # Make LISS and Spez. Antigen editable
+            "editable": col == "LISS" or col == "Spez. Antigen"
         }
         
         # Add dropdown for LISS column
         if col == "LISS":
             col_def["presentation"] = "dropdown"
+            # Use "text" as type instead of "dropdown" (which isn't a valid type)
+            col_def["type"] = "text"
         
         columns.append(col_def)
     
     # Create dropdown options for LISS
     dropdown_dict = {
-        "LISS": {"options": [{"label": val, "value": val} for val in LISS_VALUES]}
+        "LISS": {
+            "options": [{"label": val, "value": val} for val in LISS_VALUES],
+            "clearable": False
+        }
     }
     
     # Cell styling
@@ -201,7 +194,7 @@ def build_liss_table(df):
         data=df.to_dict("records"),
         editable=True,
         dropdown=dropdown_dict,
-        style_table={"maxWidth": "900px", "margin": "0 auto"},
+        style_table={"maxWidth": "1100px", "margin": "0", "overflowX": "auto"},
         style_cell={"textAlign": "center", "height": "35px"},
         style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
         style_cell_conditional=style_cell_conditional,
@@ -210,21 +203,51 @@ def build_liss_table(df):
 
 # --- Colored analysis table with integrated antigen selection (Step 2) ---
 def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
-    """Build the colored analysis table with integrated antigen selection for Step 2"""
+    """Build the colored analysis table with properly aligned antigen selection for Step 2"""
     df = prepare_data(df)
-    
-    # Create the header checkboxes for antigen columns
-    header_checkboxes = []
     
     # Create the styles for the cells based on status
     styles = []
     
-    # Get column list to determine positioning
-    column_ids = list(df.columns)
+    # Get all columns in the dataframe for proper alignment
+    all_columns = list(df.columns)
     
-    # Create individual checkbox for each antigen column that aligns with the table
+    # Create a div to hold all the checkboxes
+    header_checkboxes = html.Div(
+        id="checkbox-container",
+        style={
+            "display": "flex",
+            "flexDirection": "row",
+            "alignItems": "center",
+            "marginBottom": "10px",
+            "overflowX": "auto",
+            "whiteSpace": "nowrap",
+            "paddingLeft": "0"  # Remove left padding
+        },
+        children=[]
+    )
+    
+    # Add empty divs as spacers for non-antigen columns to ensure alignment
+    non_antigen_columns = [col for col in all_columns if col not in ANTIGEN_COLUMNS]
+    for col in non_antigen_columns:
+        # Add empty spacer for alignment
+        width = "60px" if col == "Spendernummer" else "40px"
+        if col == "Spender":
+            width = "80px"
+        elif col == "LISS":
+            width = "50px"
+        elif col == "Spez. Antigen":
+            width = "100px"
+            
+        header_checkboxes.children.append(
+            html.Div(
+                style={"width": width, "display": "inline-block"}
+            )
+        )
+    
+    # Now add checkboxes for each antigen column
     for ag in ANTIGEN_COLUMNS:
-        if ag in column_ids:
+        if ag in all_columns:
             status = status_map.get(ag, "")
             is_excluded = ag in system_excluded
             background_color = STATUS_COLORS.get(status, "#ffffff")
@@ -236,34 +259,52 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
                 "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
             })
             
-            # Create checkbox that matches column width and is disabled if excluded
-            checkbox_style = {
-                "width": "25px",  # Same as column width
-                "height": "25px",
-                "padding": "0",
-                "margin": "0 auto",
-                "display": "block",
-                "opacity": "0.5" if is_excluded else "1"
-            }
+            # Skip creating checkbox for 'spendernummer'
+            if ag == "spendernummer":
+                header_checkboxes.children.append(
+                    html.Div([
+                        html.Div(
+                            ag,  # Show column name above checkbox
+                            style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}
+                        ),
+                        # Empty div instead of checkbox
+                        html.Div(style={"height": "18px"})
+                    ], style={
+                        "width": "40px", 
+                        "display": "inline-block", 
+                        "textAlign": "center"
+                    })
+                )
+                continue
             
-            header_checkboxes.append(
+            # Create checkbox
+            header_checkboxes.children.append(
                 html.Div([
+                    html.Div(
+                        ag,  # Show column name above checkbox
+                        style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}
+                    ),
                     dcc.Checklist(
                         id={"type": "column-select", "index": ag},
                         options=[{"label": "", "value": ag}],
-                        value=[ag] if not is_excluded else [],
+                        value=[ag] if (ag not in system_excluded) else [],
                         className="column-checkbox",
-                        style={"pointer-events": "none" if is_excluded else "auto"}
+                        style={"pointerEvents": "auto"}
                     )
-                ], style={"width": "25px", "display": "inline-block", "textAlign": "center"})
+                ], style={
+                    "width": "40px", 
+                    "display": "inline-block", 
+                    "textAlign": "center",
+                    "opacity": "0.5" if is_excluded else "1"
+                })
             )
     
     # Create a hidden checklist that will store the actual selected values
     antigen_selector = html.Div([
         dcc.Checklist(
             id="antigen-select-checkboxes",
-            options=[{"label": ag, "value": ag} for ag in ANTIGEN_COLUMNS],
-            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded],
+            options=[{"label": ag, "value": ag} for ag in ANTIGEN_COLUMNS if ag != "spendernummer"],  # Exclude spendernummer
+            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"],  # Exclude spendernummer
             style={"display": "none"}  # Hidden, just used for state
         )
     ])
@@ -278,7 +319,7 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
         }
         columns.append(col_def)
     
-    # Cell styling with reduced widths
+    # Cell styling
     style_cell_conditional = [
         {"if": {"column_id": "Spendernummer"}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "40px", "textAlign": "center"},
@@ -290,42 +331,22 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
     # Add compact styling for antigen columns
     style_cell_conditional.extend([{
         "if": {"column_id": col},
-        "minWidth": "25px",
-        "width": "25px",
-        "maxWidth": "25px",
+        "minWidth": "40px",
+        "width": "40px",
+        "maxWidth": "40px",
         "textAlign": "center",
     } for col in ANTIGEN_COLUMNS])
-    
-    # Calculate offsets for checkbox positioning
-    # We need to position the checkbox row so it aligns with the antigen columns
-    non_antigen_width = sum([
-        60,  # Spendernummer
-        80,  # Spender
-        40,  # Index
-        50,  # LISS
-    ])
-    
-    # Create the header with checkbox row + alignment padding
-    header_row = html.Div([
-        # Padding div to align with non-antigen columns
-        html.Div(style={"display": "inline-block", "width": f"{non_antigen_width}px"}),
-        # Container for antigen checkboxes
-        html.Div(header_checkboxes, style={
-            "display": "inline-block",
-            "whiteSpace": "nowrap"
-        })
-    ], className="header-checkbox-row")
     
     # Combine the header row, antigen selector, and the table into a single layout
     return html.Div([
         antigen_selector,
-        header_row,
+        header_checkboxes,
         dash_table.DataTable(
             id="analysis-table",
             columns=columns,
             data=df.to_dict("records"),
             editable=False,
-            style_table={"maxWidth": "900px", "margin": "0 auto"},
+            style_table={"maxWidth": "1100px", "margin": "0", "overflowX": "auto"},
             style_cell={"textAlign": "center", "height": "35px"},
             style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
             style_cell_conditional=style_cell_conditional,
@@ -393,21 +414,13 @@ def build_final_table(df, included_columns, user_selections=None):
         columns=columns,
         data=display_df.to_dict("records"),
         editable=False,
-        style_table={"maxWidth": "900px", "margin": "0 auto"},
+        style_table={"maxWidth": "1100px", "margin": "0", "overflowX": "auto"},
         style_cell={"textAlign": "center", "height": "35px"},
         style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
         style_cell_conditional=style_cell_conditional,
         style_data_conditional=style_data_conditional,
         page_size=15
     )
-
-########################### end of part 3 ######################################################
-
-
-
-
-
-########################### start of part 4 ######################################################
 
 # --- File upload component ---
 def parse_contents(contents, filename):
@@ -605,12 +618,35 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded):
 
 # Step 3 layout with user vs system comparison
 def get_step3_layout(df, included_columns, excluded_columns, user_selections=None):
+    """Build the step 3 layout with properly handled arrays"""
+    # Ensure we have valid arrays to work with
+    if included_columns is None:
+        included_columns = []
+    if excluded_columns is None:
+        excluded_columns = []
+    if user_selections is None:
+        user_selections = []
+    
+    # Ensure all are lists
+    included_columns = list(included_columns) if isinstance(included_columns, (list, set, tuple)) else []
+    excluded_columns = list(excluded_columns) if isinstance(excluded_columns, (list, set, tuple)) else []
+    user_selections = list(user_selections) if isinstance(user_selections, (list, set, tuple)) else []
+    
     # Determine differences between system and user selections if provided
     differences = []
     if user_selections:
         user_included = set(user_selections)
         system_included = set(included_columns)
         differences = list(user_included.symmetric_difference(system_included))
+    
+    try:
+        included_str = ", ".join(sorted(included_columns)) if included_columns else "Keine"
+        user_str = ", ".join(sorted(user_selections)) if user_selections else "Keine"
+        diff_str = ", ".join(sorted(differences)) if differences else "Keine"
+    except Exception:
+        included_str = "Keine"
+        user_str = "Keine"
+        diff_str = "Keine"
     
     return html.Div([
         html.H3("Schritt 3: Finalisierte Tabelle", className="step-title"),
@@ -630,7 +666,7 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
                 html.Div([
                     html.H4("Tabelle mit Benutzerauswahl:", className="section-title"),
                     html.Div(id="user-table-container", children=[
-                        build_final_table(df, user_selections if user_selections else included_columns)
+                        build_final_table(df, user_selections)
                     ])
                 ])
             ], className="custom-tab", selected_className="custom-tab-selected"),
@@ -639,12 +675,12 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
                 html.Div([
                     html.H4("Vergleich System- und Benutzerauswahl:", className="section-title"),
                     html.Div([
-                        html.P("System-Auswahl: " + ", ".join(sorted(included_columns))),
-                        html.P("Benutzer-Auswahl: " + ", ".join(sorted(user_selections if user_selections else included_columns))),
-                        html.P("Unterschiede: " + (", ".join(sorted(differences)) if differences else "Keine"))
+                        html.P("System-Auswahl: " + included_str),
+                        html.P("Benutzer-Auswahl: " + user_str),
+                        html.P("Unterschiede: " + diff_str)
                     ], className="comparison-info"),
                     html.Div(id="comparison-table-container", children=[
-                        build_final_table(df, list(set(included_columns + (user_selections if user_selections else []))), user_selections)
+                        build_final_table(df, list(set(included_columns + user_selections)), user_selections)
                     ])
                 ])
             ], className="custom-tab", selected_className="custom-tab-selected"),
@@ -668,39 +704,7 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
         ], style={"marginTop": "20px", "display": "flex", "justifyContent": "center"}),
     ], id="step3-content")
 
-########################### end of part 4 ######################################################
-
-
-
-
-########################### start of part 5 ######################################################
-
-# Sync the main checklist with user selections for buttons
-@app.callback(
-    Output('antigen-select-checkboxes', 'value', allow_duplicate=True),
-    [Input('user-selections', 'data')],
-    prevent_initial_call=True
-)
-def sync_main_checklist(user_selections):
-    if user_selections is None:
-        raise dash.exceptions.PreventUpdate
-    
-    return user_selections# Sync the column checkboxes with user selections
-@app.callback(
-    [Output({'type': 'column-select', 'index': dash.dependencies.MATCH}, 'value')],
-    [Input('user-selections', 'data')],
-    [State({'type': 'column-select', 'index': dash.dependencies.MATCH}, 'id')],
-    prevent_initial_call=True
-)
-def sync_column_checkboxes(user_selections, checkbox_id):
-    if not user_selections:
-        return [[]]
-    
-    antigen = checkbox_id['index']
-    if antigen in user_selections:
-        return [[antigen]]
-    else:
-        return [[]]# --- Main App Layout ---
+# --- Main App Layout ---
 app.layout = html.Div([
     # Header - will be updated with current step
     html.Div(id="header-container", children=[
@@ -752,12 +756,12 @@ def start_analysis(n_clicks, current_step):
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
      Output('current-step', 'data', allow_duplicate=True),
-     Output('analyzed-data', 'data', allow_duplicate=True),
-     Output('status-map', 'data', allow_duplicate=True),
-     Output('exclusion-reasons', 'data', allow_duplicate=True),
-     Output('system-excluded', 'data', allow_duplicate=True),
-     Output('selected-antigens', 'data', allow_duplicate=True),
-     Output('user-selections', 'data', allow_duplicate=True)],
+     Output('analyzed-data', 'data'),
+     Output('status-map', 'data'),
+     Output('exclusion-reasons', 'data'),
+     Output('system-excluded', 'data'),
+     Output('selected-antigens', 'data'),
+     Output('user-selections', 'data')],
     [Input('step1-next-button', 'n_clicks')],
     [State('data-table', 'data'),
      State('current-step', 'data')],
@@ -833,32 +837,69 @@ def update_selected_antigens_display(selected_antigens):
     if not selected_antigens:
         return "Keine Antigene ausgewählt"
     
-    return ", ".join(sorted(selected_antigens))
+    try:
+        # Ensure we have a valid array before joining
+        if isinstance(selected_antigens, list):
+            return ", ".join(sorted(selected_antigens))
+        else:
+            return "Keine Antigene ausgewählt"
+    except Exception:
+        return "Keine Antigene ausgewählt"
 
-# Update user selections based on column checkboxes
+# Update the main checklist based on column checkboxes
 @app.callback(
-    Output('user-selections', 'data', allow_duplicate=True),
+    Output('antigen-select-checkboxes', 'value'),
     [Input({'type': 'column-select', 'index': dash.dependencies.ALL}, 'value')],
-    [State('current-step', 'data')],
+    [State('system-excluded', 'data')],
     prevent_initial_call=True
 )
-def update_user_selections_from_column_checkboxes(checkbox_values, current_step):
-    if not checkbox_values or current_step != 2:
-        raise dash.exceptions.PreventUpdate
-    
-    # Get the context that triggered the callback
-    ctx = callback_context
-    
-    if not ctx.triggered:
-        raise dash.exceptions.PreventUpdate
+def update_main_checklist_from_column_checkboxes(checkbox_values, system_excluded):
+    """Updates the main checklist state based on individual column checkboxes"""
+    system_excluded = system_excluded or []
     
     # Extract selected antigens from all checkboxes
     selected_antigens = []
     for values in checkbox_values:
-        if values and len(values) > 0:
+        if values and isinstance(values, list) and len(values) > 0:
             selected_antigens.extend(values)
     
-    return selected_antigens
+    # Filter out any 'spendernummer'
+    return [ag for ag in selected_antigens if ag != 'spendernummer']
+
+# Update user selections based on antigen checkboxes
+@app.callback(
+    Output('user-selections', 'data', allow_duplicate=True),
+    [Input('antigen-select-checkboxes', 'value')],
+    [State('current-step', 'data')],
+    prevent_initial_call=True
+)
+def update_user_selections_from_main_checklist(selected_values, current_step):
+    if current_step != 2:
+        raise dash.exceptions.PreventUpdate
+    
+    # Ensure we have a valid list
+    if selected_values is None:
+        selected_values = []
+    
+    return selected_values
+
+# Update column checkboxes when user selections change
+@app.callback(
+    [Output({'type': 'column-select', 'index': dash.dependencies.MATCH}, 'value')],
+    [Input('user-selections', 'data')],
+    [State({'type': 'column-select', 'index': dash.dependencies.MATCH}, 'id')],
+    prevent_initial_call=True
+)
+def sync_column_checkboxes(user_selections, checkbox_id):
+    """Keeps individual column checkboxes in sync with user selections"""
+    if not user_selections:
+        return [[]]
+    
+    antigen = checkbox_id['index']
+    if antigen in user_selections:
+        return [[antigen]]
+    else:
+        return [[]]
 
 # Select all antigens button
 @app.callback(
@@ -1048,16 +1089,6 @@ def update_from_upload(contents, filename):
     
     # If upload fails, maintain current state
     raise dash.exceptions.PreventUpdate
-
-
-########################### end of part 5 ######################################################
-
-
-
-
-
-
-########################### start of part 6 ######################################################
 
 # --- Custom CSS ---
 app.index_string = '''
@@ -1444,6 +1475,7 @@ app.index_string = '''
             .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td, 
             .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
                 border: 1px solid var(--border-color);
+                padding: 4px;
             }
             
             .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header-name {
@@ -1452,23 +1484,18 @@ app.index_string = '''
             
             /* Make dropdown inputs in table more visible */
             .Select-control {
-                border: 1px solid #b8daff !important;
+                border: 2px solid #b8daff !important;
             }
             
             .Select-value {
                 background-color: #f0f7ff !important;
             }
             
-            /* Header checkbox row styling */
-            .header-checkbox-row {
-                margin-bottom: 8px;
-                padding: 5px 0;
-                background-color: #f8f9fa;
-                border-radius: 4px;
-                white-space: nowrap;
-                overflow-x: auto;
+            .Select-menu-outer {
+                z-index: 10 !important;
             }
             
+            /* Improve checkbox alignment and visibility */
             .column-checkbox {
                 display: flex;
                 justify-content: center;
@@ -1477,9 +1504,15 @@ app.index_string = '''
             }
             
             .column-checkbox input[type="checkbox"] {
-                width: 16px;
-                height: 16px;
+                width: 18px;
+                height: 18px;
                 cursor: pointer;
+                margin: 0;
+            }
+            
+            /* Ensure tables don't overflow */
+            .dash-spreadsheet {
+                overflow-x: auto !important;
             }
             
             /* Make sure checkboxes are visible and properly aligned */
@@ -1488,6 +1521,16 @@ app.index_string = '''
                 height: 18px;
                 margin-right: 5px;
                 vertical-align: middle;
+            }
+            
+            /* Checkbox container styling */
+            #checkbox-container {
+                background-color: #f8f9fa;
+                padding: 8px 0px 8px 0px;  /* Remove left padding */
+                border-radius: 4px;
+                margin-bottom: 10px;
+                margin-left: 0;  /* Align to the left */
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             
             @media (max-width: 768px) {
@@ -1519,7 +1562,3 @@ app.index_string = '''
 
 if __name__ == "__main__":
     app.run(debug=True)
-
-
-
-########################### end of part 6 ######################################################
