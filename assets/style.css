@@ -1,4 +1,4 @@
-/* Main color variables */
+/* assets/styles.css */
 :root {
     --primary-color: #2e8bc0;
     --secondary-color: #145da0;
@@ -8,9 +8,9 @@
     --light-color: #f8f9fa;
     --dark-color: #212529;
     --border-color: #dee2e6;
+    --accent-color: #7209b7;
 }
 
-/* Base styles */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     margin: 0;
@@ -25,7 +25,6 @@ body {
     padding: 20px;
 }
 
-/* Header styles */
 .dashboard-header {
     display: flex;
     justify-content: space-between;
@@ -40,15 +39,128 @@ body {
     color: var(--secondary-color);
 }
 
-/* Main content area */
 .main-content {
     background-color: white;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
     padding: 25px;
+    margin-top: 20px;
+}
+
+/* Progress Steps - Now clickable */
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    margin: 20px 0;
+    position: relative;
+}
+
+.progress-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background-color: var(--border-color);
+    z-index: 1;
+}
+
+.step-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 20%;
+    position: relative;
+    z-index: 2;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.step-item:hover {
+    transform: translateY(-2px);
+}
+
+.step-item.disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.step-item.disabled:hover {
+    transform: none;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: white;
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--dark-color);
+    transition: all 0.3s;
+}
+
+.step-number.active {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    box-shadow: 0 0 0 4px rgba(46, 139, 192, 0.2);
+}
+
+.step-number.completed {
+    background-color: var(--success-color);
+    border-color: var(--success-color);
+    color: white;
+}
+
+.step-label {
+    font-size: 0.9rem;
+    text-align: center;
+    color: var(--dark-color);
+}
+
+.step-item.active .step-label {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+/* Welcome page */
+.welcome-container {
+    text-align: center;
+    padding: 30px;
+}
+
+.welcome-title {
+    color: var(--secondary-color);
     margin-bottom: 20px;
 }
 
+.welcome-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 40px;
+    text-align: left;
+}
+
+.welcome-step {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 25px;
+    width: 30%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.welcome-step h3 {
+    color: var(--secondary-color);
+    margin-top: 15px;
+}
+
+/* Common styles */
 .step-title {
     color: var(--secondary-color);
     border-bottom: 2px solid var(--primary-color);
@@ -61,20 +173,32 @@ body {
     margin-top: 25px;
     margin-bottom: 15px;
     font-size: 1.2em;
+    display: flex;
+    align-items: center;
 }
 
-/* Button styles */
+/* Buttons */
 .action-button {
     padding: 10px 20px;
     border: none;
     border-radius: 4px;
     cursor: pointer;
     font-weight: 500;
-    transition: background-color 0.2s;
-    font-size: 14px;
-    letter-spacing: 0.5px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin: 0 5px;
+    transition: background-color 0.2s, transform 0.1s;
+}
+
+.action-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.action-button:active {
+    transform: translateY(0);
+}
+
+.action-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .primary {
@@ -82,7 +206,7 @@ body {
     color: white;
 }
 
-.primary:hover {
+.primary:hover:not(:disabled) {
     background-color: var(--secondary-color);
 }
 
@@ -92,24 +216,20 @@ body {
     border: 1px solid var(--primary-color);
 }
 
-.secondary:hover {
+.secondary:hover:not(:disabled) {
     background-color: #f0f7ff;
 }
 
-.upload-button {
-    background-color: var(--light-color);
-    color: var(--dark-color);
-    padding: 8px 16px;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    cursor: pointer;
+.accent {
+    background-color: var(--accent-color);
+    color: white;
 }
 
-.upload-button:hover {
-    background-color: #e9ecef;
+.accent:hover:not(:disabled) {
+    background-color: #5a189a;
 }
 
-/* Panel input styles */
+/* Panel inputs */
 .panel-input {
     margin-bottom: 10px;
 }
@@ -127,150 +247,23 @@ body {
     width: 200px;
 }
 
-/* Progress Stepper styles */
-.stepper-container {
-    margin: 20px 0 30px;
-    padding: 10px;
-    background-color: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-
-.stepper {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 40px;
-}
-
-.stepper-step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    flex: 1;
-    text-align: center;
-}
-
-.step-circle {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background-color: #e9ecef;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    margin-bottom: 8px;
-    color: #495057;
-    border: 2px solid #ced4da;
-}
-
-.step-circle.active {
-    background-color: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
-}
-
-.step-circle.completed {
-    background-color: var(--success-color);
-    color: white;
-    border-color: var(--success-color);
-}
-
-.step-label {
-    font-size: 0.9em;
-    color: #6c757d;
-    white-space: nowrap;
-}
-
-.step-line {
-    flex: 1;
-    height: 2px;
-    background-color: #e9ecef;
-    margin: 0 5px;
-}
-
-.step-line.active {
-    background-color: var(--primary-color);
-}
-
-/* Tooltips */
-.tooltip {
-    position: relative;
-    display: inline-block;
-    cursor: help;
-    border-bottom: 1px dotted #888;
-}
-
-.tooltip .tooltip-text {
-    visibility: hidden;
-    width: 200px;
-    background-color: #333;
-    color: #fff;
-    text-align: center;
-    border-radius: 6px;
-    padding: 5px;
-    position: absolute;
-    z-index: 1;
-    bottom: 125%;
-    left: 50%;
-    margin-left: -100px;
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.tooltip:hover .tooltip-text {
-    visibility: visible;
-    opacity: 1;
-}
-
-/* Welcome page styles */
-.welcome-title {
-    color: var(--secondary-color);
-    margin-bottom: 20px;
-    text-align: center;
-}
-
-.welcome-container {
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-.welcome-text {
-    font-size: 1.1em;
-    line-height: 1.5;
-    margin-bottom: 20px;
-}
-
-.steps-list {
-    margin: 20px 0;
-    padding-left: 20px;
-}
-
-.steps-list li {
-    margin-bottom: 10px;
-    line-height: 1.5;
-}
-
-.start-instructions {
-    margin: 20px 0;
-}
-
-.start-actions {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 30px 0;
-}
-
-.data-info {
+/* Upload button */
+.upload-button {
     background-color: var(--light-color);
-    padding: 15px;
+    color: var(--dark-color);
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
-    margin-top: 30px;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.1s;
 }
 
-/* Step 2 specific styles */
+.upload-button:hover {
+    background-color: #e9ecef;
+    transform: translateY(-2px);
+}
+
+/* Legend and selection */
 .legend-container {
     display: flex;
     flex-wrap: wrap;
@@ -280,15 +273,77 @@ body {
     border-radius: 4px;
 }
 
-.exclusion-details-container {
-    background-color: #f8f9fa;
-    padding: 15px;
+.selection-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.selection-button {
+    background-color: #f0f7ff;
+    color: var(--secondary-color);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
     border-radius: 4px;
-    max-height: 200px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.selection-button:hover {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* Analysis tables */
+.analysis-table-container {
+    margin-top: 20px;
+    margin-bottom: 30px;
+    max-height: 500px;
     overflow-y: auto;
 }
 
-/* Step 3 specific styles */
+.selected-antigens-section {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 20px;
+}
+
+.selected-antigens-list {
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+/* Tabs */
+.custom-tabs {
+    margin-top: 20px;
+}
+
+.custom-tab {
+    padding: 12px 20px;
+    font-weight: 500;
+    color: var(--dark-color);
+    border-radius: 4px 4px 0 0;
+    border: 1px solid var(--border-color);
+    border-bottom: none;
+    background-color: #f0f0f0;
+    margin-right: 5px;
+}
+
+.custom-tab-selected {
+    background-color: white;
+    border-top: 3px solid var(--primary-color);
+    color: var(--primary-color);
+}
+
+/* Comparison and exclusion info */
+.comparison-info {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
 .excluded-antigens-section {
     margin-top: 20px;
     background-color: #f8f9fa;
@@ -305,75 +360,170 @@ body {
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td, 
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
     border: 1px solid var(--border-color);
+    padding: 4px;
 }
 
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header-name {
     font-weight: bold;
 }
 
-.dash-table-container .dash-spreadsheet-container {
-    font-size: 14px;
-}
-
-/* Make dropdown inputs in table more visible */
+/* Dropdown styling */
 .Select-control {
-    border: 1px solid #b8daff !important;
+    border: 2px solid #b8daff !important;
 }
 
 .Select-value {
     background-color: #f0f7ff !important;
 }
 
-/* Make sure checkboxes are visible and properly aligned */
-input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    margin-right: 5px;
-    vertical-align: middle;
+.Select-menu-outer {
+    z-index: 10 !important;
 }
 
-/* Responsive styles */
+/* Checkbox styling */
+.column-checkbox {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0;
+}
+
+.column-checkbox input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    margin: 0;
+}
+
+/* Checkbox container */
+#checkbox-container {
+    background-color: #f8f9fa;
+    padding: 8px 0px 8px 0px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    margin-left: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Tooltip styling */
+.with-tooltip {
+    position: relative;
+}
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    margin-left: 8px;
+    cursor: help;
+}
+
+.tooltip i {
+    color: var(--primary-color);
+}
+
+.tooltip .tooltip-content {
+    visibility: hidden;
+    width: 300px;
+    background-color: #333;
+    color: #fff;
+    text-align: left;
+    border-radius: 6px;
+    padding: 10px;
+    position: absolute;
+    z-index: 10;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -150px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.tooltip:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Responsive design */
 @media (max-width: 768px) {
-    .dashboard-header {
+    .welcome-steps {
         flex-direction: column;
-        align-items: flex-start;
+        gap: 20px;
     }
     
-    .header-actions {
-        margin-top: 10px;
-    }
-    
-    .stepper {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .stepper-step {
-        flex-direction: row;
-        width: 100%;
-        margin-bottom: 10px;
-    }
-    
-    .step-circle {
-        margin-right: 10px;
-        margin-bottom: 0;
-    }
-    
-    .step-line {
-        width: 2px;
-        height: 20px;
-        margin: 5px 0;
-    }
-    
-    .start-actions {
-        flex-direction: column;
-    }
-    
-    .start-actions > * {
-        margin: 5px 0;
-    }
-    
-    .panel-input input {
+    .welcome-step {
         width: 100%;
     }
+    
+    .selection-buttons {
+        flex-direction: column;
+    }
+    
+    .step-item {
+        width: 100%;
+    }
+    
+    .progress-steps {
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+    }
+    
+    .progress-steps::before {
+        display: none;
+    }
+}
+
+/* Report styles */
+.report-header {
+    background-color: var(--light-color);
+    padding: 15px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.report-section {
+    margin-bottom: 30px;
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.report-table th,
+.report-table td {
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    text-align: left;
+}
+
+.report-table th {
+    background-color: var(--light-color);
+    font-weight: bold;
+}
+
+.antigen-superscript {
+    vertical-align: super;
+    font-size: 0.8em;
+}
+
+/* Exclusion summary */
+.exclusion-summary {
+    background-color: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 20px 0;
+}
+
+.exclusion-summary h4 {
+    color: #856404;
+    margin-top: 0;
+}
+
+.exclusion-item {
+    margin: 5px 0;
+    color: #856404;
 }

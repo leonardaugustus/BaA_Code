@@ -1,63 +1,83 @@
+# main.py
 import dash
-from dash import dcc, html, Input, Output, State, dash_table, callback_context
+from dash import dcc, html, Input, Output, State, dash_table, callback_context, ALL, MATCH
 import pandas as pd
 import numpy as np
 import base64
 import io
+from datetime import datetime
+import json
 
-# --- Initialize app ---
+# Import from your modules
+from database import get_db, Analysis, Donor
+from step0_components import get_step0_layout, parse_pdf_content, build_diff_table
+from navigation_and_step4 import (
+    get_header_with_navigation, get_step4_layout, 
+    create_exclusion_summary, create_provisional_report,
+    generate_pdf_report, create_medical_report, create_lab_technical_report
+)
+
+# Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Antigen Analyse Dashboard"
 
-# --- Load data ---
+# Load default data
 data = pd.read_csv("data.csv")
 
-# --- Setup options ---
+# Setup options
 LISS_VALUES = ["-", "+/-", "1+", "2+", "3+", "4+"]
 ANTIGEN_COLUMNS = [col for col in data.columns if col not in ["Spendernummer", "Spender", "Spez. Antigen", "Gen.", "LISS"]]
 
-# Color codes for the analysis status
+# Update the navigation module with ANTIGEN_COLUMNS
+import navigation_and_step4
+navigation_and_step4.ANTIGEN_COLUMNS = ANTIGEN_COLUMNS
+
+# Color codes for analysis status
 STATUS_COLORS = {
-    "Bestätigt (3x +)": "#2d6a4f",  # Dark green
-    "Bestätigt (2x +)": "#b7e4c7",  # Light green
-    "Nicht ausgeschlossen": "#ffd166",  # Yellow
-    "Keine Reaktion": "#e9ecef",    # Light grey
-    "Ausgestrichen": "#e63946"      # Red
+    "Bestätigt (3x +)": "#2d6a4f",
+    "Bestätigt (2x +)": "#b7e4c7",
+    "Nicht ausgeschlossen": "#ffd166",
+    "Keine Reaktion": "#e9ecef",
+    "Ausgestrichen": "#e63946"
 }
 
 # --- Utility functions ---
 def prepare_data(df):
     """Prepare and clean the dataframe"""
-    # Create a clean copy of the dataframe
     df = df.copy()
     
-    # Move Spez. Antigen to the rightmost position if it exists
     if "Spez. Antigen" in df.columns:
         spez_antigen = df["Spez. Antigen"]
         df = df.drop(columns=["Spez. Antigen"])
         df["Spez. Antigen"] = spez_antigen
     
-    # Remove Spendernummer column for Step 1 (but keep it in the data for later steps)
-    # We'll handle this in the specific step functions
-    
-    # Remove Gen. column if it exists
     if "Gen." in df.columns:
         df = df.drop(columns=["Gen."])
     
-    # Clean up LISS values
     if "LISS" in df.columns:
         df["LISS"] = df["LISS"].apply(lambda x: x if str(x).strip() in LISS_VALUES else "-")
     
-    # Add index column after LISS if it doesn't already exist
     if "Index" not in df.columns and "LISS" in df.columns:
         df.insert(df.columns.get_loc("LISS") + 1, "Index", range(1, len(df)+1))
     
     return df
 
-# --- Analysis function ---
-def analyze_data(df):
+def analyze_data(df, manual_mode=False):
     """Analyze the data to determine antigen status"""
-    # --- Identify system-excluded antigens ---
+    if manual_mode:
+        # In manual mode, don't automatically exclude antigens
+        status_map = {}
+        exclusion_reasons = {}
+        system_excluded = set()
+        
+        for ag in ANTIGEN_COLUMNS:
+            if ag == "Spendernummer":
+                continue
+            status_map[ag] = "Nicht ausgeschlossen"
+        
+        return status_map, exclusion_reasons, system_excluded
+    
+    # Automatic mode
     exclusion_pairs = [("C", "c"), ("E", "e"), ("K", "k"), ("KpA", "KpB"),
                       ("JsA", "JsB"), ("FyA", "FyB"), ("Jka", "Jkb"),
                       ("Lea", "Leb"), ("M", "N"), ("S", "s"), ("LuA", "LuB")]
@@ -68,29 +88,22 @@ def analyze_data(df):
         if val1 == "+" or val2 == "+": return "homo"
         return "negativ"
     
-    # Create a dictionary to track which row excluded which columns
     exclusion_tracking = {col: [] for col in ANTIGEN_COLUMNS}
-    
-    # Get rows with negative LISS reaction
     negatives = df[df["LISS"] == "-"].drop(columns=["Spender", "Index", "Spez. Antigen", "LISS"], errors='ignore')
     
-    # Keep Spendernummer for reference in exclusion tracking if it exists in the original dataframe
     spendernummer_map = {}
     if "Spendernummer" in df.columns:
         for idx, row in df.iterrows():
             spendernummer_map[idx] = row.get("Spendernummer", idx + 1)
     
-    # Analyze each negative row for exclusions
     system_excluded = set()
     for idx, row in negatives.iterrows():
         temp_excl = []
-        # Check homozygote antigens
         for a in [col for col in negatives.columns if col in ANTIGEN_COLUMNS]:
             if row.get(a) == "+":
                 temp_excl.append(a)
-                exclusion_tracking[a].append(idx + 1)  # +1 for human-readable indexing
+                exclusion_tracking[a].append(idx + 1)
         
-        # Check exclusion pairs
         for a1, a2 in exclusion_pairs:
             if a1 in negatives.columns and a2 in negatives.columns:
                 status = zygosity(row.get(a1, ""), row.get(a2, ""))
@@ -109,13 +122,10 @@ def analyze_data(df):
         
         system_excluded |= set(temp_excl)
     
-    # --- Calculate statuses ---
     status_map = {}
     exclusion_reasons = {}
     
-    # Ensure 'Spendernummer' is not treated as an antigen for status calculation
     for ag in ANTIGEN_COLUMNS:
-        # Skip non-antigens like 'Spendernummer'
         if ag == "Spendernummer":
             continue
             
@@ -137,16 +147,14 @@ def analyze_data(df):
     
     return status_map, exclusion_reasons, system_excluded
 
-# --- LISS Selection Table (Step 1) ---
+# --- Build table components ---
 def build_liss_table(df):
-    """Build the data table for LISS selection in Step 1 with working dropdowns"""
+    """Build the data table for LISS selection in Step 1"""
     df = prepare_data(df)
     
-    # Drop Spendernummer column for Step 1 as requested
     if "Spendernummer" in df.columns:
         df = df.drop(columns=["Spendernummer"])
     
-    # Create column definitions
     columns = []
     for col in df.columns:
         col_def = {
@@ -155,15 +163,12 @@ def build_liss_table(df):
             "editable": col == "LISS" or col == "Spez. Antigen"
         }
         
-        # Add dropdown for LISS column
         if col == "LISS":
             col_def["presentation"] = "dropdown"
-            # Use "text" as type instead of "dropdown" (which isn't a valid type)
             col_def["type"] = "text"
         
         columns.append(col_def)
     
-    # Create dropdown options for LISS
     dropdown_dict = {
         "LISS": {
             "options": [{"label": val, "value": val} for val in LISS_VALUES],
@@ -171,7 +176,6 @@ def build_liss_table(df):
         }
     }
     
-    # Cell styling
     style_cell_conditional = [
         {"if": {"column_id": "Index"}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
@@ -179,7 +183,6 @@ def build_liss_table(df):
         {"if": {"column_id": "Spez. Antigen"}, "width": "150px", "textAlign": "left"},
     ]
     
-    # Add compact styling for antigen columns
     style_cell_conditional.extend([{
         "if": {"column_id": col},
         "minWidth": "40px",
@@ -201,18 +204,13 @@ def build_liss_table(df):
         page_size=15
     )
 
-# --- Colored analysis table with integrated antigen selection (Step 2) ---
 def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
-    """Build the colored analysis table with properly aligned antigen selection for Step 2"""
+    """Build the colored analysis table with antigen selection for Step 2"""
     df = prepare_data(df)
     
-    # Create the styles for the cells based on status
     styles = []
-    
-    # Get all columns in the dataframe for proper alignment
     all_columns = list(df.columns)
     
-    # Create a div to hold all the checkboxes
     header_checkboxes = html.Div(
         id="checkbox-container",
         style={
@@ -222,15 +220,13 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
             "marginBottom": "10px",
             "overflowX": "auto",
             "whiteSpace": "nowrap",
-            "paddingLeft": "0"  # Remove left padding
+            "paddingLeft": "0"
         },
         children=[]
     )
     
-    # Add empty divs as spacers for non-antigen columns to ensure alignment
     non_antigen_columns = [col for col in all_columns if col not in ANTIGEN_COLUMNS]
     for col in non_antigen_columns:
-        # Add empty spacer for alignment
         width = "60px" if col == "Spendernummer" else "40px"
         if col == "Spender":
             width = "80px"
@@ -240,50 +236,33 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
             width = "100px"
             
         header_checkboxes.children.append(
-            html.Div(
-                style={"width": width, "display": "inline-block"}
-            )
+            html.Div(style={"width": width, "display": "inline-block"})
         )
     
-    # Now add checkboxes for each antigen column
     for ag in ANTIGEN_COLUMNS:
         if ag in all_columns:
             status = status_map.get(ag, "")
             is_excluded = ag in system_excluded
             background_color = STATUS_COLORS.get(status, "#ffffff")
             
-            # Add style for the column
             styles.append({
                 "if": {"column_id": ag},
                 "backgroundColor": background_color,
                 "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
             })
             
-            # Skip creating checkbox for 'spendernummer'
             if ag == "spendernummer":
                 header_checkboxes.children.append(
                     html.Div([
-                        html.Div(
-                            ag,  # Show column name above checkbox
-                            style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}
-                        ),
-                        # Empty div instead of checkbox
+                        html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
                         html.Div(style={"height": "18px"})
-                    ], style={
-                        "width": "40px", 
-                        "display": "inline-block", 
-                        "textAlign": "center"
-                    })
+                    ], style={"width": "40px", "display": "inline-block", "textAlign": "center"})
                 )
                 continue
             
-            # Create checkbox
             header_checkboxes.children.append(
                 html.Div([
-                    html.Div(
-                        ag,  # Show column name above checkbox
-                        style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}
-                    ),
+                    html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
                     dcc.Checklist(
                         id={"type": "column-select", "index": ag},
                         options=[{"label": "", "value": ag}],
@@ -299,27 +278,20 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
                 })
             )
     
-    # Create a hidden checklist that will store the actual selected values
     antigen_selector = html.Div([
         dcc.Checklist(
             id="antigen-select-checkboxes",
-            options=[{"label": ag, "value": ag} for ag in ANTIGEN_COLUMNS if ag != "spendernummer"],  # Exclude spendernummer
-            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"],  # Exclude spendernummer
-            style={"display": "none"}  # Hidden, just used for state
+            options=[{"label": ag, "value": ag} for ag in ANTIGEN_COLUMNS if ag != "spendernummer"],
+            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"],
+            style={"display": "none"}
         )
     ])
     
-    # Create regular columns for the table
     columns = []
     for col in df.columns:
-        col_def = {
-            "name": col,
-            "id": col,
-            "editable": False
-        }
+        col_def = {"name": col, "id": col, "editable": False}
         columns.append(col_def)
     
-    # Cell styling
     style_cell_conditional = [
         {"if": {"column_id": "Spendernummer"}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "40px", "textAlign": "center"},
@@ -328,7 +300,6 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
         {"if": {"column_id": "Spez. Antigen"}, "width": "100px", "textAlign": "left"},
     ]
     
-    # Add compact styling for antigen columns
     style_cell_conditional.extend([{
         "if": {"column_id": col},
         "minWidth": "40px",
@@ -337,7 +308,6 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
         "textAlign": "center",
     } for col in ANTIGEN_COLUMNS])
     
-    # Combine the header row, antigen selector, and the table into a single layout
     return html.Div([
         antigen_selector,
         header_checkboxes,
@@ -355,37 +325,31 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
         )
     ])
 
-# --- Final filtered table (Step 3) ---
 def build_final_table(df, included_columns, user_selections=None):
-    """Build the final filtered table for Step 3"""
-    # Keep only columns that should be included
-    display_columns = ['Spender', 'LISS', 'Index'] + included_columns
+    """Build the final filtered table for Step 3 with reordered columns"""
+    # Reorder columns: Index first, then Spendernummer
+    display_columns = ['Index']
     
-    # Add Spendernummer if it exists
     if "Spendernummer" in df.columns:
-        display_columns = ['Spendernummer'] + display_columns
+        display_columns.append('Spendernummer')
+    
+    display_columns.extend(['Spender', 'LISS'])
+    display_columns.extend(included_columns)
     
     display_df = df[display_columns].copy()
     
-    # Create column definitions
     columns = []
     for col in display_df.columns:
-        col_def = {
-            "name": col,
-            "id": col,
-            "editable": False
-        }
+        col_def = {"name": col, "id": col, "editable": False}
         columns.append(col_def)
     
-    # Cell styling with reduced width for Spender column
     style_cell_conditional = [
-        {"if": {"column_id": "Spendernummer"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "60px", "textAlign": "center"},
+        {"if": {"column_id": "Spendernummer"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
-        {"if": {"column_id": "Spender"}, "width": "120px", "textAlign": "left"},  # Reduced width
+        {"if": {"column_id": "Spender"}, "width": "120px", "textAlign": "left"},
     ]
     
-    # Add compact styling for antigen columns
     style_cell_conditional.extend([{
         "if": {"column_id": col},
         "minWidth": "40px",
@@ -394,7 +358,6 @@ def build_final_table(df, included_columns, user_selections=None):
         "textAlign": "center",
     } for col in included_columns])
     
-    # Highlight differences between system and user selections if available
     style_data_conditional = []
     if user_selections:
         user_included = set(user_selections)
@@ -405,7 +368,7 @@ def build_final_table(df, included_columns, user_selections=None):
             if col in display_df.columns:
                 style_data_conditional.append({
                     "if": {"column_id": col},
-                    "backgroundColor": "#FFEB3B",  # Yellow highlight for differences
+                    "backgroundColor": "#FFEB3B",
                     "border": "2px solid #FFC107"
                 })
     
@@ -422,85 +385,45 @@ def build_final_table(df, included_columns, user_selections=None):
         page_size=15
     )
 
-# --- File upload component ---
-def parse_contents(contents, filename):
-    content_type, content_string = contents.split(',')
-    decoded = base64.b64decode(content_string)
-    
-    try:
-        if 'csv' in filename:
-            # Assume that the user uploaded a CSV file
-            df = pd.read_csv(io.StringIO(decoded.decode('utf-8')))
-            return df
-        else:
-            # For future implementation: PDF or image parsing
-            return None
-    except Exception as e:
-        print(e)
-        return None
-
-# --- Layout components ---
-# Header component with progress indicator
-def get_header(current_step=1):
-    # Create progress indicator
-    steps = [
-        {"label": "LISS-Werte auswählen", "active": current_step >= 1, "completed": current_step > 1},
-        {"label": "Analyse prüfen", "active": current_step >= 2, "completed": current_step > 2},
-        {"label": "Finales Ergebnis", "active": current_step >= 3, "completed": False}
-    ]
-    
-    step_items = []
-    for i, step in enumerate(steps):
-        step_items.append(
-            html.Div([
-                html.Div(f"{i+1}", className=f"step-number {'active' if step['active'] else ''} {'completed' if step['completed'] else ''}"),
-                html.Div(step["label"], className="step-label")
-            ], className=f"step-item {'active' if step['active'] else ''}")
-        )
-    
-    progress_indicator = html.Div(step_items, className="progress-steps")
-    
-    return html.Div([
-        html.Div([
-            html.H1("Antigen Analyse Dashboard", className="dashboard-title"),
-            html.Div([
-                dcc.Upload(
-                    id='upload-data',
-                    children=html.Button('Datei hochladen', className="upload-button"),
-                    multiple=False
-                ),
-            ], className="header-actions")
-        ], className="dashboard-header"),
-        
-        # Add progress indicator
-        progress_indicator
-    ])
-
-# Welcome/landing page layout
+# --- Layout functions ---
 def get_landing_page():
     return html.Div([
         html.H2("Willkommen beim Antigen Analyse Dashboard", className="welcome-title"),
-        html.P("Dieses Tool hilft Ihnen bei der Analyse von Antigen-Tests in drei einfachen Schritten:"),
+        html.P("Dieses Tool hilft Ihnen bei der Analyse von Antigen-Tests in fünf einfachen Schritten:"),
         
         html.Div([
             html.Div([
-                html.Div("1", className="step-number active"),
+                html.Div("0", className="step-number active"),
+                html.H3("PDF & Datenbank"),
+                html.P("PDF-Daten importieren oder vorherige Analyse aus der Datenbank laden.")
+            ], className="welcome-step"),
+            
+            html.Div([
+                html.Div("1", className="step-number"),
                 html.H3("LISS-Werte auswählen"),
-                html.P("Importieren Sie Ihre Daten und wählen Sie die LISS-Werte für jede Probe aus.")
+                html.P("LISS-Werte für jede Probe auswählen.")
             ], className="welcome-step"),
             
             html.Div([
                 html.Div("2", className="step-number"),
                 html.H3("Analyse prüfen"),
-                html.P("Überprüfen Sie die automatische Analyse und wählen Sie relevante Antigene aus.")
+                html.P("Automatische Analyse überprüfen und relevante Antigene auswählen.")
             ], className="welcome-step"),
-            
+        ], className="welcome-steps"),
+        
+        html.Div([
             html.Div([
                 html.Div("3", className="step-number"),
                 html.H3("Finales Ergebnis"),
-                html.P("Sehen Sie die gefilterte Tabelle mit Ihren ausgewählten Antigenen.")
+                html.P("Gefilterte Tabelle mit ausgewählten Antigenen ansehen.")
             ], className="welcome-step"),
-        ], className="welcome-steps"),
+            
+            html.Div([
+                html.Div("4", className="step-number"),
+                html.H3("Berichtserstellung"),
+                html.P("Medizinische und labortechnische Berichte erstellen.")
+            ], className="welcome-step"),
+        ], className="welcome-steps", style={"marginTop": "20px"}),
         
         html.Div([
             html.Button("Neue Analyse starten", id="start-analysis-button", 
@@ -508,7 +431,6 @@ def get_landing_page():
         ], style={"marginTop": "30px", "display": "flex", "justifyContent": "center"}),
     ], id="landing-page", className="welcome-container")
 
-# Step 1 layout
 def get_step1_layout(df=None):
     if df is None:
         df = data
@@ -526,11 +448,9 @@ def get_step1_layout(df=None):
         ], style={"display": "flex", "gap": "20px", "marginBottom": "20px"}),
         
         html.H3("Schritt 1: LISS-Werte auswählen", className="step-title"),
-        html.P("Wählen Sie für jede Zeile den entsprechenden LISS-Wert aus. Die Spezifischen Antigene können Sie ebenfalls bearbeiten."),
+        html.P("Wählen Sie für jede Zeile den entsprechenden LISS-Wert aus."),
         
-        html.Div(id="step1-table-container", children=[
-            build_liss_table(df)
-        ]),
+        html.Div(id="step1-table-container", children=[build_liss_table(df)]),
         
         html.Div([
             html.Button("LISS-Werte bestätigen", id="step1-next-button", 
@@ -538,9 +458,8 @@ def get_step1_layout(df=None):
         ], style={"marginTop": "20px", "display": "flex", "justifyContent": "center"}),
     ], id="step1-content")
 
-# Step 2 layout with integrated antigen selection in table
-def get_step2_layout(df, status_map, exclusion_reasons, system_excluded):
-    # Create color legend
+def get_step2_layout(df, status_map, exclusion_reasons, system_excluded, manual_mode=False):
+    """Enhanced Step 2 layout with exclusion summary and provisional report"""
     legend_items = []
     for status, color in STATUS_COLORS.items():
         legend_items.append(
@@ -550,7 +469,6 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded):
             ], style={"display": "flex", "alignItems": "center", "gap": "8px", "marginRight": "20px"})
         )
     
-    # Tooltip for the analysis explanation
     analysis_tooltip = html.Div([
         html.I(className="fas fa-info-circle"),
         html.Div([
@@ -565,7 +483,6 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded):
         ], className="tooltip-content")
     ], className="tooltip")
     
-    # Create a dedicated antigen selection component for better usability
     antigen_selection_component = html.Div([
         html.H4("Antigene auswählen:", className="section-title"),
         html.P("Wählen Sie die Antigene aus, die im finalen Ergebnis angezeigt werden sollen:"),
@@ -576,38 +493,40 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded):
         ], className="selection-buttons")
     ], className="antigen-selection-controls")
     
-    # Create the layout
+    default_selected = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"]
+    
     return html.Div([
         html.H3("Schritt 2: Analyse prüfen und Antigene auswählen", className="step-title"),
         
-        # Color legend
+        html.Div([
+            html.P(f"Modus: {'Manuelle Auswertung' if manual_mode else 'Automatische Auswertung'}", 
+                   style={"fontWeight": "bold", "color": "#7209b7" if manual_mode else "#2e8bc0"})
+        ]),
+        
         html.Div([
             html.H4("Farbliche Legende:", className="section-title"),
             html.Div(legend_items, className="legend-container")
         ], className="legend-section"),
         
-        # Instructions for antigen selection
+        create_exclusion_summary(exclusion_reasons, system_excluded),
+        
         html.Div([
-            html.H4([
-                "Antigen-Analyse Übersicht und Auswahl:",
-                analysis_tooltip
-            ], className="section-title with-tooltip"),
-            html.P("Die Tabelle zeigt die Analyseergebnisse für alle Antigene. Wählen Sie die relevanten Antigene durch Anklicken der Checkboxen über der Tabelle aus."),
+            html.H4(["Antigen-Analyse Übersicht und Auswahl:", analysis_tooltip], 
+                   className="section-title with-tooltip"),
+            html.P("Die Tabelle zeigt die Analyseergebnisse für alle Antigene."),
             antigen_selection_component
         ]),
         
-        # Antigen analysis table with integrated selection
-        html.Div(id="analysis-table-container", className="analysis-table-container", children=[
-            build_analysis_table(df, status_map, exclusion_reasons, system_excluded)
-        ]),
+        html.Div(id="analysis-table-container", className="analysis-table-container", 
+                children=[build_analysis_table(df, status_map, exclusion_reasons, system_excluded)]),
         
-        # Selected antigens summary - will be updated by callbacks
         html.Div([
             html.H4("Ausgewählte Antigene:", className="section-title"),
             html.Div(id="selected-antigens-display", className="selected-antigens-list")
         ], className="selected-antigens-section"),
         
-        # Navigation buttons
+        create_provisional_report(status_map, default_selected),
+        
         html.Div([
             html.Button("Zurück zu Schritt 1", id="step2-back-button", 
                        className="action-button secondary", style={"marginRight": "10px"}),
@@ -616,10 +535,8 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded):
         ], style={"marginTop": "20px", "display": "flex", "justifyContent": "center"}),
     ], id="step2-content")
 
-# Step 3 layout with user vs system comparison
-def get_step3_layout(df, included_columns, excluded_columns, user_selections=None):
-    """Build the step 3 layout with properly handled arrays"""
-    # Ensure we have valid arrays to work with
+def get_step3_layout(df, included_columns, excluded_columns, user_selections=None, lot_number=""):
+    """Build step 3 layout with lot number display"""
     if included_columns is None:
         included_columns = []
     if excluded_columns is None:
@@ -627,12 +544,10 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
     if user_selections is None:
         user_selections = []
     
-    # Ensure all are lists
     included_columns = list(included_columns) if isinstance(included_columns, (list, set, tuple)) else []
     excluded_columns = list(excluded_columns) if isinstance(excluded_columns, (list, set, tuple)) else []
     user_selections = list(user_selections) if isinstance(user_selections, (list, set, tuple)) else []
     
-    # Determine differences between system and user selections if provided
     differences = []
     if user_selections:
         user_included = set(user_selections)
@@ -651,7 +566,11 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
     return html.Div([
         html.H3("Schritt 3: Finalisierte Tabelle", className="step-title"),
         
-        # Tab selector for different views
+        html.Div([
+            html.P(f"Lot-Nummer: {lot_number if lot_number else 'Nicht angegeben'}", 
+                   style={"fontWeight": "bold", "marginBottom": "15px"})
+        ]),
+        
         dcc.Tabs([
             dcc.Tab(label="Systemauswahl", children=[
                 html.Div([
@@ -686,149 +605,317 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
             ], className="custom-tab", selected_className="custom-tab-selected"),
         ], id="result-tabs", className="custom-tabs"),
         
-        # Excluded antigens summary
         html.Div([
             html.H4("Ausgeschlossene Antigene:", className="section-title"),
             html.Div(", ".join(sorted(excluded_columns)) if excluded_columns else "Keine", 
                     className="excluded-antigens-list")
         ], className="excluded-antigens-section"),
         
-        # Navigation buttons
         html.Div([
             html.Button("Zurück zu Schritt 2", id="step3-back-button", 
                        className="action-button secondary", style={"marginRight": "10px"}),
-            html.Button("PDF erstellen", id="generate-pdf-button",
-                       className="action-button accent", style={"marginRight": "10px"}),
-            html.Button("Neue Analyse starten", id="step3-restart-button", 
+            html.Button("Weiter zu Berichtserstellung", id="step3-next-button",
                        className="action-button primary")
         ], style={"marginTop": "20px", "display": "flex", "justifyContent": "center"}),
     ], id="step3-content")
 
 # --- Main App Layout ---
 app.layout = html.Div([
-    # Header - will be updated with current step
     html.Div(id="header-container", children=[
-        get_header(current_step=1)
+        get_header_with_navigation(current_step=-1)
     ]),
     
-    # Main content area - will be updated by callbacks
     html.Div(id="main-content", children=[
-        get_landing_page()  # Start with welcome page
+        get_landing_page()
     ], className="main-content"),
     
-    # Store components to keep state between callbacks
-    dcc.Store(id='current-step', data=0),  # 0 = landing page, 1-3 = steps
+    # Store components
+    dcc.Store(id='current-step', data=-1),
+    dcc.Store(id='step-states', data={0: True, 1: False, 2: False, 3: False, 4: False}),
     dcc.Store(id='analyzed-data'),
     dcc.Store(id='status-map'),
     dcc.Store(id='exclusion-reasons'),
     dcc.Store(id='system-excluded'),
     dcc.Store(id='selected-antigens'),
     dcc.Store(id='user-selections'),
+    dcc.Store(id='lot-number'),
+    dcc.Store(id='evaluation-mode-store', data='auto'),
+    dcc.Store(id='pdf-data'),
+    dcc.Store(id='db-analysis-id'),
     
-    # Hidden dummy components for callback stability
     html.Div(id="dummy-div", style={"display": "none"}),
     html.Div(id="dummy-output", style={"display": "none"})
 ], className="dashboard-container")
 
 # --- Callbacks ---
+
+# Navigation callback - Handle step navigation clicks
+@app.callback(
+    [Output('main-content', 'children'),
+     Output('header-container', 'children'),
+     Output('current-step', 'data')],
+    [Input({'type': 'step-nav', 'index': ALL}, 'n_clicks')],
+    [State('current-step', 'data'),
+     State('step-states', 'data'),
+     State('analyzed-data', 'data'),
+     State('status-map', 'data'),
+     State('exclusion-reasons', 'data'),
+     State('system-excluded', 'data'),
+     State('user-selections', 'data'),
+     State('lot-number', 'data'),
+     State('evaluation-mode-store', 'data')],
+    prevent_initial_call=True
+)
+def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_data, 
+                          status_map, exclusion_reasons, system_excluded, 
+                          user_selections, lot_number, eval_mode):
+    ctx = callback_context
+    if not ctx.triggered:
+        raise dash.exceptions.PreventUpdate
+    
+    triggered = ctx.triggered[0]
+    step_num = json.loads(triggered['prop_id'].split('.')[0])['index']
+    
+    if not step_states.get(step_num, False):
+        raise dash.exceptions.PreventUpdate
+    
+    if step_num == 0:
+        return [get_step0_layout(), get_header_with_navigation(0, step_states), 0]
+    elif step_num == 1:
+        df = pd.DataFrame(analyzed_data) if analyzed_data else data
+        return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
+    elif step_num == 2:
+        df = pd.DataFrame(analyzed_data)
+        return [get_step2_layout(df, status_map, exclusion_reasons, set(system_excluded), eval_mode == 'manual'),
+                get_header_with_navigation(2, step_states), 2]
+    elif step_num == 3:
+        df = pd.DataFrame(analyzed_data)
+        included = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded]
+        excluded = system_excluded
+        return [get_step3_layout(df, included, excluded, user_selections, lot_number),
+                get_header_with_navigation(3, step_states), 3]
+    elif step_num == 4:
+        df = pd.DataFrame(analyzed_data)
+        return [get_step4_layout(df, status_map, exclusion_reasons, user_selections, lot_number),
+                get_header_with_navigation(4, step_states), 4]
+    
+    raise dash.exceptions.PreventUpdate
+
 # Start analysis from landing page
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
-     Output('current-step', 'data', allow_duplicate=True)],
+     Output('current-step', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
     [Input('start-analysis-button', 'n_clicks')],
-    [State('current-step', 'data')],
     prevent_initial_call=True
 )
-def start_analysis(n_clicks, current_step):
-    if not n_clicks or current_step != 0:
+def start_analysis(n_clicks):
+    if not n_clicks:
         raise dash.exceptions.PreventUpdate
     
-    # Start with step 1
+    step_states = {0: True, 1: True, 2: False, 3: False, 4: False}
+    return [get_step0_layout(), get_header_with_navigation(0, step_states), 0, step_states]
+
+# Step 0 - PDF Upload and parsing
+@app.callback(
+    [Output('pdf-comparison-area', 'children'),
+     Output('pdf-parse-status', 'children'),
+     Output('pdf-data', 'data'),
+     Output('step0-confirm-button', 'disabled')],
+    [Input('pdf-upload', 'contents')],
+    [State('pdf-upload', 'filename'),
+     State('analyzed-data', 'data')],
+    prevent_initial_call=True
+)
+def handle_pdf_upload(contents, filename, current_data):
+    if not contents:
+        raise dash.exceptions.PreventUpdate
+    
+    pdf_df = parse_pdf_content(contents, filename)
+    
+    if pdf_df is None:
+        return [
+            None,
+            html.Div("Fehler beim Parsen der PDF-Datei", style={"color": "red"}),
+            None,
+            True
+        ]
+    
+    current_df = pd.DataFrame(current_data) if current_data else data
+    comparison = build_diff_table(pdf_df, current_df)
+    
     return [
-        get_step1_layout(),
-        get_header(current_step=1),
-        1  # Set step to 1
+        comparison,
+        html.Div(f"PDF erfolgreich geladen: {filename}", style={"color": "green"}),
+        pdf_df.to_dict('records'),
+        False
     ]
 
-# Step 1 -> Step 2: Analyze data and go to step 2
+# Step 0 - Database loading
+@app.callback(
+    [Output('main-content', 'children', allow_duplicate=True),
+     Output('analyzed-data', 'data', allow_duplicate=True),
+     Output('status-map', 'data', allow_duplicate=True),
+     Output('exclusion-reasons', 'data', allow_duplicate=True),
+     Output('system-excluded', 'data', allow_duplicate=True),
+     Output('user-selections', 'data', allow_duplicate=True),
+     Output('lot-number', 'data', allow_duplicate=True),
+     Output('current-step', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
+    [Input('open-from-db-button', 'n_clicks')],
+    [State('db-analysis-dropdown', 'value')],
+    prevent_initial_call=True
+)
+def load_from_database(n_clicks, analysis_id):
+    if not n_clicks or not analysis_id:
+        raise dash.exceptions.PreventUpdate
+    
+    db = next(get_db())
+    analysis = db.query(Analysis).filter_by(id=analysis_id).first()
+    
+    if not analysis:
+        raise dash.exceptions.PreventUpdate
+    
+    liss_data = analysis.get_liss_data()
+    status_data = analysis.get_status_data()
+    user_sel = analysis.get_user_selections()
+    
+    df = pd.DataFrame(liss_data)
+    
+    step_states = {0: True, 1: True, 2: True, 3: True, 4: True}
+    
+    included = [ag for ag in ANTIGEN_COLUMNS if ag not in status_data.get('system_excluded', [])]
+    excluded = status_data.get('system_excluded', [])
+    
+    return [
+        get_step3_layout(df, included, excluded, user_sel, analysis.lot_number),
+        liss_data,
+        status_data.get('status_map', {}),
+        status_data.get('exclusion_reasons', {}),
+        status_data.get('system_excluded', []),
+        user_sel,
+        analysis.lot_number,
+        3,
+        step_states
+    ]
+
+# Step 0 - Confirm and proceed
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
      Output('current-step', 'data', allow_duplicate=True),
-     Output('analyzed-data', 'data'),
-     Output('status-map', 'data'),
-     Output('exclusion-reasons', 'data'),
-     Output('system-excluded', 'data'),
-     Output('selected-antigens', 'data'),
-     Output('user-selections', 'data')],
-    [Input('step1-next-button', 'n_clicks')],
-    [State('data-table', 'data'),
-     State('current-step', 'data')],
+     Output('analyzed-data', 'data', allow_duplicate=True),
+     Output('lot-number', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
+    [Input('step0-confirm-button', 'n_clicks'),
+     Input('step0-manual-button', 'n_clicks')],
+    [State('pdf-data', 'data'),
+     State('lot-number-input', 'value')],
     prevent_initial_call=True
 )
-def go_to_step2(n_clicks, table_data, current_step):
+def proceed_from_step0(confirm_clicks, manual_clicks, pdf_data, lot_num):
+    ctx = callback_context
+    if not ctx.triggered:
+        raise dash.exceptions.PreventUpdate
+    
+    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+    
+    if button_id == 'step0-confirm-button' and pdf_data:
+        df = pd.DataFrame(pdf_data)
+    else:
+        df = data
+    
+    step_states = {0: True, 1: True, 2: True, 3: False, 4: False}
+    
+    return [
+        get_step1_layout(df),
+        get_header_with_navigation(1, step_states),
+        1,
+        df.to_dict('records'),
+        lot_num,
+        step_states
+    ]
+
+# Step 0 - Evaluation mode toggle
+@app.callback(
+    Output('evaluation-mode-store', 'data'),
+    [Input('evaluation-mode', 'value')],
+    prevent_initial_call=True
+)
+def update_evaluation_mode(mode):
+    return mode
+
+# Step 1 -> Step 2
+@app.callback(
+    [Output('main-content', 'children', allow_duplicate=True),
+     Output('header-container', 'children', allow_duplicate=True),
+     Output('current-step', 'data', allow_duplicate=True),
+     Output('analyzed-data', 'data', allow_duplicate=True),
+     Output('status-map', 'data', allow_duplicate=True),
+     Output('exclusion-reasons', 'data', allow_duplicate=True),
+     Output('system-excluded', 'data', allow_duplicate=True),
+     Output('selected-antigens', 'data', allow_duplicate=True),
+     Output('user-selections', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
+    [Input('step1-next-button', 'n_clicks')],
+    [State('data-table', 'data'),
+     State('current-step', 'data'),
+     State('evaluation-mode-store', 'data'),
+     State('step-states', 'data')],
+    prevent_initial_call=True
+)
+def go_to_step2(n_clicks, table_data, current_step, eval_mode, step_states):
     if not n_clicks or current_step != 1:
         raise dash.exceptions.PreventUpdate
     
-    # Convert table data to dataframe
     df = pd.DataFrame(table_data)
     
-    # Add back Spendernummer if it was removed for step 1
     if "Spendernummer" not in df.columns and "Spendernummer" in data.columns:
         df.insert(0, "Spendernummer", data["Spendernummer"].values)
     
-    # Analyze the data
-    status_map, exclusion_reasons, system_excluded = analyze_data(df)
+    status_map, exclusion_reasons, system_excluded = analyze_data(df, eval_mode == 'manual')
     
-    # Initialize selected antigens - include all except system-excluded
     selected_antigens = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded]
-    
-    # Initially set user selections same as system selections
     user_selections = selected_antigens.copy()
     
-    # Create and return step 2 layout
-    step2_layout = get_step2_layout(df, status_map, exclusion_reasons, system_excluded)
+    step_states[2] = True
+    step_states[3] = True
+    
+    step2_layout = get_step2_layout(df, status_map, exclusion_reasons, system_excluded, eval_mode == 'manual')
     
     return [
         step2_layout,
-        get_header(current_step=2),
-        2,  # Set step to 2
+        get_header_with_navigation(2, step_states),
+        2,
         df.to_dict('records'),
         status_map,
         exclusion_reasons,
         list(system_excluded),
         selected_antigens,
-        user_selections
+        user_selections,
+        step_states
     ]
 
-# Step 2 -> Step 1: Go back to step 1
+# Step 2 -> Step 1 (Back)
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
      Output('current-step', 'data', allow_duplicate=True)],
     [Input('step2-back-button', 'n_clicks')],
     [State('analyzed-data', 'data'),
-     State('current-step', 'data')],
+     State('current-step', 'data'),
+     State('step-states', 'data')],
     prevent_initial_call=True
 )
-def go_back_to_step1(n_clicks, analyzed_data, current_step):
+def go_back_to_step1(n_clicks, analyzed_data, current_step, step_states):
     if not n_clicks or current_step != 2:
         raise dash.exceptions.PreventUpdate
     
-    # Convert stored data back to dataframe
     df = pd.DataFrame(analyzed_data)
-    
-    # Go back to step 1, keeping the current data
-    step1_layout = get_step1_layout(df)
-    
-    return [
-        step1_layout,
-        get_header(current_step=1),
-        1  # Set step to 1
-    ]
+    return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
 
-# Update selected antigens display in Step 2
+# Update selected antigens display
 @app.callback(
     Output('selected-antigens-display', 'children'),
     [Input('user-selections', 'data')]
@@ -838,7 +925,6 @@ def update_selected_antigens_display(selected_antigens):
         return "Keine Antigene ausgewählt"
     
     try:
-        # Ensure we have a valid array before joining
         if isinstance(selected_antigens, list):
             return ", ".join(sorted(selected_antigens))
         else:
@@ -846,27 +932,21 @@ def update_selected_antigens_display(selected_antigens):
     except Exception:
         return "Keine Antigene ausgewählt"
 
-# Update the main checklist based on column checkboxes
+# Checkbox synchronization
 @app.callback(
     Output('antigen-select-checkboxes', 'value'),
-    [Input({'type': 'column-select', 'index': dash.dependencies.ALL}, 'value')],
+    [Input({'type': 'column-select', 'index': ALL}, 'value')],
     [State('system-excluded', 'data')],
     prevent_initial_call=True
 )
 def update_main_checklist_from_column_checkboxes(checkbox_values, system_excluded):
-    """Updates the main checklist state based on individual column checkboxes"""
     system_excluded = system_excluded or []
-    
-    # Extract selected antigens from all checkboxes
     selected_antigens = []
     for values in checkbox_values:
         if values and isinstance(values, list) and len(values) > 0:
             selected_antigens.extend(values)
-    
-    # Filter out any 'spendernummer'
     return [ag for ag in selected_antigens if ag != 'spendernummer']
 
-# Update user selections based on antigen checkboxes
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('antigen-select-checkboxes', 'value')],
@@ -876,32 +956,11 @@ def update_main_checklist_from_column_checkboxes(checkbox_values, system_exclude
 def update_user_selections_from_main_checklist(selected_values, current_step):
     if current_step != 2:
         raise dash.exceptions.PreventUpdate
-    
-    # Ensure we have a valid list
     if selected_values is None:
         selected_values = []
-    
     return selected_values
 
-# Update column checkboxes when user selections change
-@app.callback(
-    [Output({'type': 'column-select', 'index': dash.dependencies.MATCH}, 'value')],
-    [Input('user-selections', 'data')],
-    [State({'type': 'column-select', 'index': dash.dependencies.MATCH}, 'id')],
-    prevent_initial_call=True
-)
-def sync_column_checkboxes(user_selections, checkbox_id):
-    """Keeps individual column checkboxes in sync with user selections"""
-    if not user_selections:
-        return [[]]
-    
-    antigen = checkbox_id['index']
-    if antigen in user_selections:
-        return [[antigen]]
-    else:
-        return [[]]
-
-# Select all antigens button
+# Selection buttons
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('select-all-button', 'n_clicks')],
@@ -911,11 +970,8 @@ def sync_column_checkboxes(user_selections, checkbox_id):
 def select_all_antigens(n_clicks, status_map):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
-    
-    # Select all antigens that have a status
     return list(status_map.keys())
 
-# Deselect all antigens button
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('deselect-all-button', 'n_clicks')],
@@ -924,10 +980,8 @@ def select_all_antigens(n_clicks, status_map):
 def deselect_all_antigens(n_clicks):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
-    
     return []
 
-# Default selection button (same as system selection)
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('default-selection-button', 'n_clicks')],
@@ -937,42 +991,41 @@ def deselect_all_antigens(n_clicks):
 def default_selection(n_clicks, system_selection):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
-    
     return system_selection
 
-# Step 2 -> Step 3: Finalize and go to step 3
+# Step 2 -> Step 3
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
-     Output('current-step', 'data', allow_duplicate=True)],
+     Output('current-step', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
     [Input('step2-next-button', 'n_clicks')],
     [State('analyzed-data', 'data'),
      State('selected-antigens', 'data'),
      State('user-selections', 'data'),
-     State('current-step', 'data')],
+     State('current-step', 'data'),
+     State('lot-number', 'data'),
+     State('step-states', 'data')],
     prevent_initial_call=True
 )
-def go_to_step3(n_clicks, analyzed_data, selected_antigens, user_selections, current_step):
+def go_to_step3(n_clicks, analyzed_data, selected_antigens, user_selections, 
+                current_step, lot_number, step_states):
     if not n_clicks or current_step != 2:
         raise dash.exceptions.PreventUpdate
     
-    # Convert stored data back to dataframe
     df = pd.DataFrame(analyzed_data)
-    
-    # Determine included and excluded columns
     included_columns = selected_antigens if selected_antigens else []
     excluded_columns = [ag for ag in ANTIGEN_COLUMNS if ag not in included_columns]
     
-    # Create and return step 3 layout
-    step3_layout = get_step3_layout(df, included_columns, excluded_columns, user_selections)
+    step_states[3] = True
+    step_states[4] = True
     
-    return [
-        step3_layout,
-        get_header(current_step=3),
-        3  # Set step to 3
-    ]
+    step3_layout = get_step3_layout(df, included_columns, excluded_columns, 
+                                    user_selections, lot_number)
+    
+    return [step3_layout, get_header_with_navigation(3, step_states), 3, step_states]
 
-# Step 3 -> Step 2: Go back to step 2
+# Step 3 -> Step 2 (Back)
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
@@ -982,74 +1035,148 @@ def go_to_step3(n_clicks, analyzed_data, selected_antigens, user_selections, cur
      State('status-map', 'data'),
      State('exclusion-reasons', 'data'),
      State('system-excluded', 'data'),
-     State('current-step', 'data')],
+     State('current-step', 'data'),
+     State('evaluation-mode-store', 'data'),
+     State('step-states', 'data')],
     prevent_initial_call=True
 )
-def go_back_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons, system_excluded, current_step):
+def go_back_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons, 
+                     system_excluded, current_step, eval_mode, step_states):
     if not n_clicks or current_step != 3:
         raise dash.exceptions.PreventUpdate
     
-    # Convert stored data back to dataframe
     df = pd.DataFrame(analyzed_data)
-    
-    # Convert system_excluded back to set
     system_excluded = set(system_excluded)
     
-    # Go back to step 2
-    step2_layout = get_step2_layout(df, status_map, exclusion_reasons, system_excluded)
+    step2_layout = get_step2_layout(df, status_map, exclusion_reasons, 
+                                   system_excluded, eval_mode == 'manual')
     
-    return [
-        step2_layout,
-        get_header(current_step=2),
-        2  # Set step to 2
-    ]
+    return [step2_layout, get_header_with_navigation(2, step_states), 2]
 
-# Step 3 -> Landing: Start new analysis
+# Step 3 -> Step 4
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
-     Output('current-step', 'data', allow_duplicate=True),
-     Output('analyzed-data', 'data', allow_duplicate=True),
-     Output('status-map', 'data', allow_duplicate=True),
-     Output('exclusion-reasons', 'data', allow_duplicate=True),
-     Output('system-excluded', 'data', allow_duplicate=True),
-     Output('selected-antigens', 'data', allow_duplicate=True),
-     Output('user-selections', 'data', allow_duplicate=True)],
-    [Input('step3-restart-button', 'n_clicks')],
-    [State('current-step', 'data')],
+     Output('current-step', 'data', allow_duplicate=True)],
+    [Input('step3-next-button', 'n_clicks')],
+    [State('analyzed-data', 'data'),
+     State('status-map', 'data'),
+     State('exclusion-reasons', 'data'),
+     State('user-selections', 'data'),
+     State('lot-number', 'data'),
+     State('current-step', 'data'),
+     State('step-states', 'data')],
     prevent_initial_call=True
 )
-def restart_analysis(n_clicks, current_step):
+def go_to_step4(n_clicks, analyzed_data, status_map, exclusion_reasons, 
+                user_selections, lot_number, current_step, step_states):
     if not n_clicks or current_step != 3:
         raise dash.exceptions.PreventUpdate
     
-    # Start a new analysis (reset to landing page)
-    return [
-        get_landing_page(),
-        get_header(current_step=1),
-        0,  # Set step to landing page
-        None,  # Clear analyzed data
-        None,  # Clear status map
-        None,  # Clear exclusion reasons
-        None,  # Clear system excluded
-        None,  # Clear selected antigens
-        None   # Clear user selections
-    ]
+    df = pd.DataFrame(analyzed_data)
+    step4_layout = get_step4_layout(df, status_map, exclusion_reasons, 
+                                   user_selections, lot_number)
+    
+    return [step4_layout, get_header_with_navigation(4, step_states), 4]
 
-# Generate PDF (placeholder functionality)
+# Step 4 - Generate PDF
 @app.callback(
-    Output('dummy-output', 'children'),
-    [Input('generate-pdf-button', 'n_clicks')],
+    Output('download-report-pdf', 'data'),
+    [Input('generate-report-pdf-button', 'n_clicks')],
+    [State('analyzed-data', 'data'),
+     State('status-map', 'data'),
+     State('exclusion-reasons', 'data'),
+     State('user-selections', 'data'),
+     State('lot-number', 'data')],
     prevent_initial_call=True
 )
-def generate_pdf(n_clicks):
+def download_pdf_report(n_clicks, analyzed_data, status_map, exclusion_reasons, 
+                       user_selections, lot_number):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
     
-    # This is a placeholder - actual PDF generation would require additional implementation
-    return "PDF generation requested"
+    df = pd.DataFrame(analyzed_data)
+    pdf_bytes = generate_pdf_report(df, status_map, exclusion_reasons, 
+                                   user_selections, lot_number)
+    
+    filename = f"antigen_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    
+    return dcc.send_bytes(pdf_bytes, filename)
 
-# File upload callback
+# Step 4 - Save to database
+@app.callback(
+    Output('dummy-output', 'children', allow_duplicate=True),
+    [Input('save-to-db-button', 'n_clicks')],
+    [State('analyzed-data', 'data'),
+     State('status-map', 'data'),
+     State('exclusion-reasons', 'data'),
+     State('system-excluded', 'data'),
+     State('user-selections', 'data'),
+     State('lot-number', 'data')],
+    prevent_initial_call=True
+)
+def save_to_database(n_clicks, analyzed_data, status_map, exclusion_reasons,
+                    system_excluded, user_selections, lot_number):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    
+    db = next(get_db())
+    
+    df = pd.DataFrame(analyzed_data)
+    spendernummer = df['Spendernummer'].iloc[0] if 'Spendernummer' in df.columns else 'Unknown'
+    
+    donor = db.query(Donor).filter_by(spendernummer=spendernummer).first()
+    if not donor:
+        donor = Donor(spendernummer=spendernummer)
+        db.add(donor)
+    
+    analysis = Analysis(
+        spendernummer=spendernummer,
+        lot_number=lot_number
+    )
+    
+    analysis.set_liss_data(analyzed_data)
+    analysis.set_status_data({
+        'status_map': status_map,
+        'exclusion_reasons': exclusion_reasons,
+        'system_excluded': system_excluded
+    })
+    analysis.set_user_selections(user_selections)
+    
+    db.add(analysis)
+    db.commit()
+    
+    return "Saved to database"
+
+# Step 4 -> Step 3 (Back)
+@app.callback(
+    [Output('main-content', 'children', allow_duplicate=True),
+     Output('header-container', 'children', allow_duplicate=True),
+     Output('current-step', 'data', allow_duplicate=True)],
+    [Input('step4-back-button', 'n_clicks')],
+    [State('analyzed-data', 'data'),
+     State('selected-antigens', 'data'),
+     State('system-excluded', 'data'),
+     State('user-selections', 'data'),
+     State('lot-number', 'data'),
+     State('current-step', 'data'),
+     State('step-states', 'data')],
+    prevent_initial_call=True
+)
+def go_back_to_step3(n_clicks, analyzed_data, selected_antigens, system_excluded,
+                     user_selections, lot_number, current_step, step_states):
+    if not n_clicks or current_step != 4:
+        raise dash.exceptions.PreventUpdate
+    
+    df = pd.DataFrame(analyzed_data)
+    included = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded]
+    excluded = system_excluded
+    
+    step3_layout = get_step3_layout(df, included, excluded, user_selections, lot_number)
+    
+    return [step3_layout, get_header_with_navigation(3, step_states), 3]
+
+# Restart from Step 4
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
@@ -1059,38 +1186,28 @@ def generate_pdf(n_clicks):
      Output('exclusion-reasons', 'data', allow_duplicate=True),
      Output('system-excluded', 'data', allow_duplicate=True),
      Output('selected-antigens', 'data', allow_duplicate=True),
-     Output('user-selections', 'data', allow_duplicate=True)],
-    [Input('upload-data', 'contents')],
-    [State('upload-data', 'filename')],
+     Output('user-selections', 'data', allow_duplicate=True),
+     Output('lot-number', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
+    [Input('step4-restart-button', 'n_clicks')],
+    [State('current-step', 'data')],
     prevent_initial_call=True
 )
-def update_from_upload(contents, filename):
-    if not contents:
+def restart_analysis_from_step4(n_clicks, current_step):
+    if not n_clicks or current_step != 4:
         raise dash.exceptions.PreventUpdate
     
-    # Parse the uploaded file
-    uploaded_df = parse_contents(contents, filename)
+    step_states = {0: True, 1: False, 2: False, 3: False, 4: False}
     
-    if uploaded_df is not None:
-        # Use the uploaded data for step 1
-        step1_layout = get_step1_layout(uploaded_df)
-        
-        return [
-            step1_layout,
-            get_header(current_step=1),
-            1,  # Set step to 1
-            None,  # Clear analyzed data
-            None,  # Clear status map
-            None,  # Clear exclusion reasons
-            None,  # Clear system excluded
-            None,  # Clear selected antigens
-            None   # Clear user selections
-        ]
-    
-    # If upload fails, maintain current state
-    raise dash.exceptions.PreventUpdate
+    return [
+        get_landing_page(),
+        get_header_with_navigation(-1, step_states),
+        -1,
+        None, None, None, None, None, None, None,
+        step_states
+    ]
 
-# --- Custom CSS ---
+# Custom index string
 app.index_string = '''
 <!DOCTYPE html>
 <html>
@@ -1101,453 +1218,8 @@ app.index_string = '''
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
+        <link rel="stylesheet" href="/assets/styles.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
-        <style>
-            :root {
-                --primary-color: #2e8bc0;
-                --secondary-color: #145da0;
-                --success-color: #2d6a4f;
-                --warning-color: #ffd166;
-                --danger-color: #e63946;
-                --light-color: #f8f9fa;
-                --dark-color: #212529;
-                --border-color: #dee2e6;
-                --accent-color: #7209b7;
-            }
-            
-            body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                margin: 0;
-                padding: 0;
-                background-color: #f5f7f9;
-                color: var(--dark-color);
-            }
-            
-            .dashboard-container {
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 20px;
-            }
-            
-            .dashboard-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 20px;
-                padding-bottom: 10px;
-                border-bottom: 1px solid var(--border-color);
-            }
-            
-            .dashboard-title {
-                margin: 0;
-                color: var(--secondary-color);
-            }
-            
-            .main-content {
-                background-color: white;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-                padding: 25px;
-                margin-top: 20px;
-            }
-            
-            /* Progress Steps */
-            .progress-steps {
-                display: flex;
-                justify-content: space-between;
-                margin: 20px 0;
-                position: relative;
-            }
-            
-            .progress-steps::before {
-                content: '';
-                position: absolute;
-                top: 20px;
-                left: 10%;
-                right: 10%;
-                height: 2px;
-                background-color: var(--border-color);
-                z-index: 1;
-            }
-            
-            .step-item {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                width: 33.33%;
-                position: relative;
-                z-index: 2;
-            }
-            
-            .step-number {
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                background-color: white;
-                border: 2px solid var(--border-color);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: bold;
-                margin-bottom: 8px;
-                color: var(--dark-color);
-            }
-            
-            .step-number.active {
-                background-color: var(--primary-color);
-                border-color: var(--primary-color);
-                color: white;
-            }
-            
-            .step-number.completed {
-                background-color: var(--success-color);
-                border-color: var(--success-color);
-                color: white;
-            }
-            
-            .step-label {
-                font-size: 0.9rem;
-                text-align: center;
-                color: var(--dark-color);
-            }
-            
-            .step-item.active .step-label {
-                font-weight: bold;
-                color: var(--primary-color);
-            }
-            
-            /* Welcome page */
-            .welcome-container {
-                text-align: center;
-                padding: 30px;
-            }
-            
-            .welcome-title {
-                color: var(--secondary-color);
-                margin-bottom: 20px;
-            }
-            
-            .welcome-steps {
-                display: flex;
-                justify-content: space-between;
-                margin-top: 40px;
-                text-align: left;
-            }
-            
-            .welcome-step {
-                background-color: #f8f9fa;
-                border-radius: 8px;
-                padding: 25px;
-                width: 30%;
-                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-            }
-            
-            .welcome-step h3 {
-                color: var(--secondary-color);
-                margin-top: 15px;
-            }
-            
-            /* Common styles */
-            .step-title {
-                color: var(--secondary-color);
-                border-bottom: 2px solid var(--primary-color);
-                padding-bottom: 8px;
-                margin-bottom: 20px;
-            }
-            
-            .section-title {
-                color: var(--secondary-color);
-                margin-top: 25px;
-                margin-bottom: 15px;
-                font-size: 1.2em;
-                display: flex;
-                align-items: center;
-            }
-            
-            .with-tooltip {
-                position: relative;
-            }
-            
-            .tooltip {
-                position: relative;
-                display: inline-block;
-                margin-left: 8px;
-                cursor: help;
-            }
-            
-            .tooltip i {
-                color: var(--primary-color);
-            }
-            
-            .tooltip .tooltip-content {
-                visibility: hidden;
-                width: 300px;
-                background-color: #333;
-                color: #fff;
-                text-align: left;
-                border-radius: 6px;
-                padding: 10px;
-                position: absolute;
-                z-index: 10;
-                bottom: 125%;
-                left: 50%;
-                margin-left: -150px;
-                opacity: 0;
-                transition: opacity 0.3s;
-                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
-            }
-            
-            .tooltip:hover .tooltip-content {
-                visibility: visible;
-                opacity: 1;
-            }
-            
-            .action-button {
-                padding: 10px 20px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-weight: 500;
-                transition: background-color 0.2s, transform 0.1s;
-            }
-            
-            .action-button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            }
-            
-            .action-button:active {
-                transform: translateY(0);
-            }
-            
-            .primary {
-                background-color: var(--primary-color);
-                color: white;
-            }
-            
-            .primary:hover {
-                background-color: var(--secondary-color);
-            }
-            
-            .secondary {
-                background-color: white;
-                color: var(--primary-color);
-                border: 1px solid var(--primary-color);
-            }
-            
-            .secondary:hover {
-                background-color: #f0f7ff;
-            }
-            
-            .accent {
-                background-color: var(--accent-color);
-                color: white;
-            }
-            
-            .accent:hover {
-                background-color: #5a189a;
-            }
-            
-            .panel-input {
-                margin-bottom: 10px;
-            }
-            
-            .panel-input label {
-                display: block;
-                margin-bottom: 5px;
-                font-weight: 500;
-            }
-            
-            .panel-input input {
-                padding: 8px;
-                border: 1px solid var(--border-color);
-                border-radius: 4px;
-                width: 200px;
-            }
-            
-            .upload-button {
-                background-color: var(--light-color);
-                color: var(--dark-color);
-                padding: 8px 16px;
-                border: 1px solid var(--border-color);
-                border-radius: 4px;
-                cursor: pointer;
-                transition: background-color 0.2s, transform 0.1s;
-            }
-            
-            .upload-button:hover {
-                background-color: #e9ecef;
-                transform: translateY(-2px);
-            }
-            
-            /* Step 2 specific styles */
-            .legend-container {
-                display: flex;
-                flex-wrap: wrap;
-                margin-bottom: 15px;
-                background-color: #f8f9fa;
-                padding: 10px;
-                border-radius: 4px;
-            }
-            
-            .selection-buttons {
-                display: flex;
-                gap: 10px;
-                margin-bottom: 15px;
-            }
-            
-            .selection-button {
-                background-color: #f0f7ff;
-                color: var(--secondary-color);
-                border: 1px solid var(--border-color);
-                padding: 6px 12px;
-                border-radius: 4px;
-                cursor: pointer;
-                transition: background-color 0.2s;
-            }
-            
-            .selection-button:hover {
-                background-color: var(--primary-color);
-                color: white;
-            }
-            
-            .analysis-table-container {
-                margin-top: 20px;
-                margin-bottom: 30px;
-                max-height: 500px;
-                overflow-y: auto;
-            }
-            
-            .selected-antigens-section {
-                background-color: #f8f9fa;
-                padding: 15px;
-                border-radius: 4px;
-                margin-top: 20px;
-            }
-            
-            .selected-antigens-list {
-                font-weight: 500;
-                color: var(--primary-color);
-            }
-            
-            /* Step 3 specific styles */
-            .custom-tabs {
-                margin-top: 20px;
-            }
-            
-            .custom-tab {
-                padding: 12px 20px;
-                font-weight: 500;
-                color: var(--dark-color);
-                border-radius: 4px 4px 0 0;
-                border: 1px solid var(--border-color);
-                border-bottom: none;
-                background-color: #f0f0f0;
-                margin-right: 5px;
-            }
-            
-            .custom-tab-selected {
-                background-color: white;
-                border-top: 3px solid var(--primary-color);
-                color: var(--primary-color);
-            }
-            
-            .comparison-info {
-                background-color: #f8f9fa;
-                padding: 15px;
-                border-radius: 4px;
-                margin-bottom: 20px;
-            }
-            
-            .excluded-antigens-section {
-                margin-top: 20px;
-                background-color: #f8f9fa;
-                padding: 15px;
-                border-radius: 4px;
-            }
-            
-            .excluded-antigens-list {
-                font-weight: 500;
-                color: var(--danger-color);
-            }
-            
-            /* DataTable customizations */
-            .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td, 
-            .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
-                border: 1px solid var(--border-color);
-                padding: 4px;
-            }
-            
-            .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header-name {
-                font-weight: bold;
-            }
-            
-            /* Make dropdown inputs in table more visible */
-            .Select-control {
-                border: 2px solid #b8daff !important;
-            }
-            
-            .Select-value {
-                background-color: #f0f7ff !important;
-            }
-            
-            .Select-menu-outer {
-                z-index: 10 !important;
-            }
-            
-            /* Improve checkbox alignment and visibility */
-            .column-checkbox {
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                margin: 0;
-            }
-            
-            .column-checkbox input[type="checkbox"] {
-                width: 18px;
-                height: 18px;
-                cursor: pointer;
-                margin: 0;
-            }
-            
-            /* Ensure tables don't overflow */
-            .dash-spreadsheet {
-                overflow-x: auto !important;
-            }
-            
-            /* Make sure checkboxes are visible and properly aligned */
-            input[type="checkbox"] {
-                width: 18px;
-                height: 18px;
-                margin-right: 5px;
-                vertical-align: middle;
-            }
-            
-            /* Checkbox container styling */
-            #checkbox-container {
-                background-color: #f8f9fa;
-                padding: 8px 0px 8px 0px;  /* Remove left padding */
-                border-radius: 4px;
-                margin-bottom: 10px;
-                margin-left: 0;  /* Align to the left */
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            }
-            
-            @media (max-width: 768px) {
-                .welcome-steps {
-                    flex-direction: column;
-                    gap: 20px;
-                }
-                
-                .welcome-step {
-                    width: 100%;
-                }
-                
-                .selection-buttons {
-                    flex-direction: column;
-                }
-            }
-        </style>
     </head>
     <body>
         {%app_entry%}
