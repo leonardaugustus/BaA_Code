@@ -135,15 +135,88 @@ analyses (
 
 ######################################################################################
 #########################################################################################
-forgot to mention the version
-problems and bugs of the current version 3.0
 
-you still cant swtich from step 2 to 0 for example, also once in step 1 you cant go back to step 0
+problems and bugs of the current version 3.0:
+################################################
 
+You are a senior Python / Dash developer.  
+Please deliver **Version 3.0** of the “Antigen-Analyse Dashboard”.  
+Start from the current v2.0 codebase and fix / add the items below.  
+Code must remain modular, readable, and PEP-8 compliant.
 
-problems in step 2
+────────────────────────────────────────────
+🐞  GENERAL BUG-FIXES
+────────────────────────────────────────────
+1. **Lot-Nummer**
+   • Must be persisted in `analyses.lot_number`.  
+   • Show it in both report tabs and embed in the exported PDF header.
 
-the buttons Alle auswähle alleabwählen and Standart auswahl doent work. But you can chose the Colums from D to XgA which is very good
+2. **Database sanity**
+   • Add unit test `tests/test_db_basic.py` that:  
+     – inserts dummy donor + analysis,  
+     – queries back,  
+     – asserts equality.  
+   • If `create_all()` already ran, run migrations safely (no data loss).
+
+3. **File upload**
+   • Accept **PDF or JPEG** (`application/pdf`, `image/jpeg`) only.  
+   • Auto-detect table by matching *column headers* (letters & labels always identical).  
+   • Ignore cell content when matching.  
+   • If parser confidence < 0.95, show editable preview so user can fix “+”/“0”.
+
+4. **Step navigation picker**
+   • User may click any circle (0–4) to jump *forwards OR backwards*.  
+   • Disable circles if prerequisite data missing (tooltip: “Bitte zuerst Schritt X abschließen”).
+
+5. **Letter formatting**
+   • Implement `format_antigen()` so that   `Lea → Leᵃ`, `JsB → Jsᴮ`, etc.  
+   • Apply throughout Steps 2–4 and in both PDFs.
+
+────────────────────────────────────────────
+🪜  STEP-SPECIFIC CHANGES
+────────────────────────────────────────────
+**STEP 0 – Import & Vergleich**  
+• After parsing, render a **side-by-side diff editor**:  
+  left = parsed table (read-only), right = editable copy.  
+• User can click a cell in right pane to toggle between “+”, “0”, “nt”.  
+• Add “Spender wählen” dropdown; prefill with spendernummer from PDF/CSV.
+
+**STEP 1 – LISS-Werte auswählen**  
+• Rename column header `spendernummer` → `Sp.Nr.` (shorter).  
+• Rename `index` → `Idx`.  
+• Prevent the `Sp.Nr.` column from being editable or sortable.
+
+**STEP 2 – Analyse prüfen**  
+• Buttons **“Alle auswählen / Alle abwählen / Standard-Auswahl”** must work.  
+  – Standard = all non-excluded antigens.  
+• **Provisorischer Vorbefund**:  
+  – List *separately* “Bestätigt (3× +)” and “Bestätigt (2× +)”.  
+• Checkbox row must align exactly with table columns (no right-shift).  
+  – Use CSS `display:grid; grid-template-columns:` mirroring DataTable widths.  
+• Remove `Sp.Nr.` from the toggle list entirely (never selectable).
+
+**STEP 3 – Finalisierte Tabelle**  
+• Verify `Idx` is first column, `Sp.Nr.` is second.  
+• `Sp.Nr.` must NOT appear in the “Ausgewählte Antigene” list.
+
+**STEP 4 – Reporting**  
+• Embed Lot-Nummer in both report tabs and PDF.  
+• Add tiny “Go to Step 2” link inside each report tab for quick jump-back.
+
+────────────────────────────────────────────
+📐  UI / DESIGN
+────────────────────────────────────────────
+• Keep responsive CSS in `assets/styles.css`.  
+• Button labels stay German.  
+• Provide screenshot after alignment fix (include in PR description).
+
+────────────────────────────────────────────
+💾  PERSISTENCE LAYER
+────────────────────────────────────────────
+Unchanged schema, but ensure:
+```sql
+analyses.lot_number TEXT  -- persisted & non-null after Step 0
+
 
 
 
