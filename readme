@@ -1,0 +1,142 @@
+autmatische auswertung
+
+manuelle auswertung
+
+vorschritt: pdf einladen und dann die pdf vergleichen und dann bestätigen.
+
+schritt zwei eine zusammenfassung vond ausgeschlossen
+
+provisorischer vorbefund (als titel):
+Bestätigt zwei und drei und DeprecationWarning
+
+nacher 
+Ausgeschlossene Antigene und wraum auf grund von welcher spalte
+
+
+
+schritt 3  reihenfolge von index ganz am anfang
+
+
+bei schritt 4 mit zwei Reporting mit zwei Register Medizinischer Report, der andere Labortechnischer Report:
+
+zusammenfassung datum uhrzeit, userauswahl lot nummer, antikörper hat der patient, erste table mit reaktionen
+eine für das labor wie viel reaktione was, was hat der user .
+
+
+
+ausgangslage alle t
+
+
+
+datenbanken: überlegen
+
+
+
+Hoch und tiefstellen: lea: lea muss hochgestellt werden auch die anderen müssen hoch oder tiefgestellt werden wenn es nötig ist von Antikörper D bis Xga
+
+
+
+
+einzelner code für jede analyse:
+
+
+
+
+
+
+schauen ob noch papyisiertes
+
+
+bachelorarbeit schreiben
+
+
+You are a senior Python / Dash developer.  
+I already have a 3-step “Antigen-Analyse Dashboard” (~2 000 LoC).  
+Please refactor / extend it with the features below.  
+Keep code modular, readable, and PEP-8 compliant.
+
+────────────────────────────────────────────
+🌟  HIGH-LEVEL GOALS
+────────────────────────────────────────────
+0. **Schritt 0**: PDF-Import & Vergleich **plus DB-Auswahl**
+1. **Automatische Auswertung** (default)  
+2. **Manuelle Auswertung** (toggle-able)  
+3. Re-order some columns, add Lot-Nr., improve reports, superscript antigen symbols  
+4. **Step-picker navigation**: user can click directly on steps 0-4
+
+────────────────────────────────────────────
+🪜  DETAILED USER FLOW & REQUIREMENTS
+────────────────────────────────────────────
+**STEP 0 – „PDF einladen & vergleichen / Datenbank öffnen“**  
+• Left pane: *PDF upload* → parse with `tabula-py` or `camelot`.  
+• Right pane: *DB-Auswahl* dropdown listing previous analyses (id + datum + spendernummer).  
+• Two-column diff-view (*PDF-Data* vs *Current Table*).  
+• Buttons: **Bestätigen** (replace table) · **Öffnen aus DB** (loads selected record).
+ in this step it also would be nice if you could change the + or the 0 on your own somehow...
+
+**STEP 1 – LISS-Werte auswählen** (unchanged).
+
+**STEP 2 – Analyse prüfen** (enhanced):  
+• **Zusammenfassung der ausgeschlossenen Antigene** under legend.  
+• **Provisorischer Vorbefund** heading =  
+  `Bestätigt (2× + und 3× +)` + any `DeprecationWarning`.  
+• For every excluded antigen show “Ausgeschlossen wegen Spalte ‹XYZ›”.
+
+**STEP 3 – Finalisierte Tabelle**  
+• **Index** column first, then *Spendernummer*.  
+• Lot-Nummer (captured in Step 0 or manual entry) appears in header.
+
+**STEP 4 – Reporting**  
+Two tabs:
+
+1. **Medizinischer Report**  
+   `Datum · Uhrzeit · Benutzer · Lot-Nr.` header  
+   List antibodies present (patient level)  
+   First table = antigen reactions
+
+2. **Labortechnischer Report**  
+   Count reactions per antigen, highlight user vs system choice
+
+PDF export via `reportlab` or `weasyprint`.
+
+────────────────────────────────────────────
+📐  UI / DESIGN
+────────────────────────────────────────────
+• Replace inline CSS with `assets/styles.css`; keep only placeholders in `app.index_string`.  
+• Progress bar becomes a **clickable step-picker (0-4)**:<br>
+  clicking a circle jumps to that step (if data prerequisites met).  
+• German labels:<br>
+  “Automatische Auswertung / Manuelle Auswertung”,<br>
+  “PDF vergleichen & bestätigen”, “Öffnen aus DB”.
+
+────────────────────────────────────────────
+💾  PERSISTENCE LAYER (Full analysis archive)
+────────────────────────────────────────────
+SQLite + SQLAlchemy (Postgres-ready):
+
+```sql
+donors (
+  spendernummer TEXT PRIMARY KEY,
+  name          TEXT,
+  notes         TEXT
+);
+
+analyses (
+  id              INTEGER PRIMARY KEY,
+  spendernummer   TEXT REFERENCES donors(spendernummer),
+  timestamp       DATETIME,
+  lot_number      TEXT,
+  liss_json       TEXT,   -- raw table after Step 1
+  status_json     TEXT,   -- status_map + exclusion info
+  user_sel_json   TEXT,   -- user selections
+  report_pdf      BLOB
+);
+
+
+
+
+
+
+
+
+
