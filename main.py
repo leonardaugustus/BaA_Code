@@ -234,22 +234,18 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
     )
     
     non_antigen_columns = [col for col in all_columns if col not in ANTIGEN_COLUMNS]
-    for col in non_antigen_columns:
-        width = "60px" if col == "Spendernummer" else "40px"
-        if col == "Spender":
-            width = "80px"
-        elif col == "LISS":
-            width = "50px"
-        elif col == "Spez. Antigen":
-            width = "100px"
-            
-        header_checkboxes.children.append(
-            html.Div(style={"width": width, "display": "inline-block"})
-        )
-    
-        # ... in the checkbox creation loop:
     for ag in ANTIGEN_COLUMNS:
         if ag in all_columns:
+            status = status_map.get(ag, "")
+            is_excluded = ag in system_excluded  # Define is_excluded here
+            background_color = STATUS_COLORS.get(status, "#ffffff")
+            
+            styles.append({
+                "if": {"column_id": ag},
+                "backgroundColor": background_color,
+                "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
+            })
+            
             # Skip Sp.Nr. for checkboxes
             if ag in ["Sp.Nr.", "spendernummer"]:
                 header_checkboxes.children.append(
@@ -647,6 +643,7 @@ app.layout = html.Div([
     dcc.Store(id='lot-number'),
     dcc.Store(id='evaluation-mode-store', data='auto'),
     dcc.Store(id='pdf-data'),
+    dcc.Store(id='pdf-confidence', data=0), 
     dcc.Store(id='db-analysis-id'),
     
     html.Div(id="dummy-div", style={"display": "none"}),
@@ -722,7 +719,9 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
     
     raise dash.exceptions.PreventUpdate
 
-# Start analysis from landing page
+# Replace the incorrect callback section starting at line ~735 with:
+
+# Quick jump callback
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
@@ -736,8 +735,6 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
      State('step-states', 'data')],
     prevent_initial_call=True
 )
-
-
 def quick_jump_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons, 
                         system_excluded, eval_mode, step_states):
     if not n_clicks:
@@ -751,8 +748,15 @@ def quick_jump_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons,
     
     return [step2_layout, get_header_with_navigation(2, step_states), 2]
 
-
-
+# Start analysis from landing page
+@app.callback(
+    [Output('main-content', 'children', allow_duplicate=True),
+     Output('header-container', 'children', allow_duplicate=True),
+     Output('current-step', 'data', allow_duplicate=True),
+     Output('step-states', 'data', allow_duplicate=True)],
+    [Input('start-analysis-button', 'n_clicks')],
+    prevent_initial_call=True
+)
 def start_analysis(n_clicks):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate

@@ -7,6 +7,7 @@ import io
 from datetime import datetime
 import tabula
 import json
+from database import Analysis
 
 def parse_pdf_content(contents, filename):
     """Parse uploaded PDF using tabula-py"""
@@ -215,3 +216,68 @@ def get_step0_layout(db_session=None):
             ])
         ], style={"marginTop": "20px", "padding": "10px", "backgroundColor": "#f8f9fa", "borderRadius": "5px"})
     ], id="step0-content")
+
+
+
+
+
+# 2. Fix the parse_file_content function in step0_components.py:
+def parse_file_content(contents, filename):
+    """Wrapper function to handle file parsing"""
+    # For now, just handle PDFs
+    if filename.lower().endswith('.pdf'):
+        df = parse_pdf_content(contents, filename)
+        if df is not None:
+            # Simple confidence calculation
+            confidence = 0.98 if len(df) > 0 else 0
+            return df, confidence, None
+        else:
+            return None, 0, "Fehler beim Parsen der PDF-Datei"
+    else:
+        return None, 0, "Nur PDF-Dateien werden derzeit unterstützt"
+
+def build_editable_diff_table(pdf_data, current_data, confidence):
+    """Build editable comparison table for low confidence imports"""
+    if pdf_data is None or current_data is None:
+        return html.Div("Keine Daten zum Vergleichen vorhanden")
+    
+    confidence_color = "#28a745" if confidence >= 0.95 else "#ffc107" if confidence >= 0.8 else "#dc3545"
+    
+    return html.Div([
+        html.Div([
+            html.H4("Datenvergleich: Importierte Daten vs. Aktuelle Tabelle"),
+            html.Div([
+                html.Span(f"Erkennungsgenauigkeit: {confidence:.1%}", 
+                         style={"backgroundColor": confidence_color, "color": "white", 
+                               "padding": "5px 10px", "borderRadius": "4px"})
+            ], style={"marginBottom": "10px"})
+        ]),
+        
+        html.Div([
+            html.Div([
+                html.H5("Importierte Daten (bearbeitbar)"),
+                dash_table.DataTable(
+                    id="pdf-preview-table",
+                    columns=[{"name": col, "id": col, "editable": True} 
+                            for col in pdf_data.columns],
+                    data=pdf_data.to_dict('records'),
+                    style_table={"maxHeight": "400px", "overflowY": "auto"},
+                    style_cell={"textAlign": "center"},
+                    page_size=10
+                )
+            ], style={"width": "48%", "display": "inline-block", "verticalAlign": "top"}),
+            
+            html.Div([
+                html.H5("Aktuelle Tabelle"),
+                dash_table.DataTable(
+                    id="current-preview-table",
+                    columns=[{"name": col, "id": col} for col in current_data.columns],
+                    data=current_data.to_dict('records'),
+                    style_table={"maxHeight": "400px", "overflowY": "auto"},
+                    style_cell={"textAlign": "center"},
+                    editable=False,
+                    page_size=10
+                )
+            ], style={"width": "48%", "display": "inline-block", "verticalAlign": "top", "marginLeft": "4%"})
+        ])
+    ])
