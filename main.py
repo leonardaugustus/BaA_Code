@@ -947,7 +947,10 @@ def update_evaluation_mode(mode):
     prevent_initial_call=True
 )
 def go_to_step2(n_clicks, table_data, current_step, eval_mode, step_states):
-    # ... existing code ...
+    # Only continue after the user presses “LISS-Werte bestätigen”
+    if not n_clicks or current_step != 1:
+        raise dash.exceptions.PreventUpdate
+    # -----------------------------------------------------------------
     df = pd.DataFrame(table_data)
     
     # Handle both old and new column names
