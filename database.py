@@ -24,7 +24,7 @@ class Analysis(Base):
     id = Column(Integer, primary_key=True)
     spendernummer = Column(String, ForeignKey('donors.spendernummer'))
     timestamp = Column(DateTime, default=func.now())
-    lot_number = Column(String)
+    lot_number = Column(Text, nullable=True)  # Explicitly nullable for legacy rows
     liss_json = Column(Text)  # Raw table after Step 1
     status_json = Column(Text)  # status_map + exclusion info
     user_sel_json = Column(Text)  # user selections
@@ -56,8 +56,13 @@ DATABASE_URL = "sqlite:///antigen_analysis.db"  # Can be changed to PostgreSQL
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create tables
-Base.metadata.create_all(bind=engine)
+# Safe create_all - won't drop existing tables
+def init_database():
+    """Initialize database tables safely without data loss"""
+    Base.metadata.create_all(bind=engine)
+
+# Initialize on import
+init_database()
 
 def get_db():
     db = SessionLocal()

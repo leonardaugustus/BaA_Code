@@ -527,3 +527,23 @@ body {
     margin: 5px 0;
     color: #856404;
 }
+
+.quick-jump-link {
+    background: none;
+    border: none;
+    color: var(--primary-color);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 5px 10px;
+    text-decoration: underline;
+    transition: color 0.2s;
+}
+
+.quick-jump-link:hover {
+    color: var(--secondary-color);
+}
+
+.quick-jump-link:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}

@@ -26,7 +26,11 @@ data = pd.read_csv("data.csv")
 
 # Setup options
 LISS_VALUES = ["-", "+/-", "1+", "2+", "3+", "4+"]
-ANTIGEN_COLUMNS = [col for col in data.columns if col not in ["Spendernummer", "Spender", "Spez. Antigen", "Gen.", "LISS"]]
+ANTIGEN_COLUMNS = [col for col in data.columns if col not in ["Sp.Nr.", "spendernummer", "Spender", "Spez. Antigen", "Gen.", "LISS"]]
+
+
+
+
 
 # Update the navigation module with ANTIGEN_COLUMNS
 import navigation_and_step4
@@ -42,9 +46,14 @@ STATUS_COLORS = {
 }
 
 # --- Utility functions ---
+# 2. Update prepare_data function to rename column
 def prepare_data(df):
     """Prepare and clean the dataframe"""
     df = df.copy()
+    
+    # Rename spendernummer to Sp.Nr. if it exists
+    if "spendernummer" in df.columns:
+        df = df.rename(columns={"spendernummer": "Sp.Nr."})
     
     if "Spez. Antigen" in df.columns:
         spez_antigen = df["Spez. Antigen"]
@@ -65,13 +74,12 @@ def prepare_data(df):
 def analyze_data(df, manual_mode=False):
     """Analyze the data to determine antigen status"""
     if manual_mode:
-        # In manual mode, don't automatically exclude antigens
         status_map = {}
         exclusion_reasons = {}
         system_excluded = set()
         
         for ag in ANTIGEN_COLUMNS:
-            if ag == "Spendernummer":
+            if ag in ["Sp.Nr.", "spendernummer"]:  # Skip both variations
                 continue
             status_map[ag] = "Nicht ausgeschlossen"
         
@@ -152,14 +160,14 @@ def build_liss_table(df):
     """Build the data table for LISS selection in Step 1"""
     df = prepare_data(df)
     
-    if "Spendernummer" in df.columns:
-        df = df.drop(columns=["Spendernummer"])
+    # Don't drop Sp.Nr. column anymore
     
     columns = []
     for col in df.columns:
         col_def = {
             "name": col,
             "id": col,
+            # Only LISS and Spez. Antigen are editable, Sp.Nr. is NOT
             "editable": col == "LISS" or col == "Spez. Antigen"
         }
         
@@ -239,23 +247,15 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
             html.Div(style={"width": width, "display": "inline-block"})
         )
     
+        # ... in the checkbox creation loop:
     for ag in ANTIGEN_COLUMNS:
         if ag in all_columns:
-            status = status_map.get(ag, "")
-            is_excluded = ag in system_excluded
-            background_color = STATUS_COLORS.get(status, "#ffffff")
-            
-            styles.append({
-                "if": {"column_id": ag},
-                "backgroundColor": background_color,
-                "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
-            })
-            
-            if ag == "spendernummer":
+            # Skip Sp.Nr. for checkboxes
+            if ag in ["Sp.Nr.", "spendernummer"]:
                 header_checkboxes.children.append(
                     html.Div([
                         html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
-                        html.Div(style={"height": "18px"})
+                        html.Div(style={"height": "18px"})  # Empty space instead of checkbox
                     ], style={"width": "40px", "display": "inline-block", "textAlign": "center"})
                 )
                 continue
@@ -327,11 +327,13 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
 
 def build_final_table(df, included_columns, user_selections=None):
     """Build the final filtered table for Step 3 with reordered columns"""
-    # Reorder columns: Index first, then Spendernummer
+    # Reorder columns: Index first, then Sp.Nr.
     display_columns = ['Index']
     
-    if "Spendernummer" in df.columns:
-        display_columns.append('Spendernummer')
+    if "Sp.Nr." in df.columns:
+        display_columns.append('Sp.Nr.')
+    elif "spendernummer" in df.columns:  # Fallback for legacy data
+        display_columns.append('spendernummer')
     
     display_columns.extend(['Spender', 'LISS'])
     display_columns.extend(included_columns)
@@ -343,7 +345,11 @@ def build_final_table(df, included_columns, user_selections=None):
         col_def = {"name": col, "id": col, "editable": False}
         columns.append(col_def)
     
+    
+        # 7. Update style_cell_conditional for Sp.Nr.
     style_cell_conditional = [
+        {"if": {"column_id": "Sp.Nr."}, "width": "60px", "textAlign": "center"},
+        {"if": {"column_id": "spendernummer"}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Spendernummer"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
@@ -666,6 +672,7 @@ app.layout = html.Div([
      State('evaluation-mode-store', 'data')],
     prevent_initial_call=True
 )
+
 def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_data, 
                           status_map, exclusion_reasons, system_excluded, 
                           user_selections, lot_number, eval_mode):
@@ -673,14 +680,28 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
     if not ctx.triggered:
         raise dash.exceptions.PreventUpdate
     
-    triggered = ctx.triggered[0]
-    step_num = json.loads(triggered['prop_id'].split('.')[0])['index']
+    # Find which button was clicked
+    button_id = None
+    for i, clicks in enumerate(n_clicks_list):
+        if clicks:
+            prop_id = ctx.triggered[0]['prop_id']
+            if f'"index":{i}' in prop_id:
+                button_id = i
+                break
     
+    if button_id is None:
+        raise dash.exceptions.PreventUpdate
+    
+    step_num = button_id
+    
+    # Check if step is accessible
     if not step_states.get(step_num, False):
         raise dash.exceptions.PreventUpdate
     
+    # Navigate to requested step
     if step_num == 0:
-        return [get_step0_layout(), get_header_with_navigation(0, step_states), 0]
+        db_session = next(get_db())
+        return [get_step0_layout(db_session), get_header_with_navigation(0, step_states), 0]
     elif step_num == 1:
         df = pd.DataFrame(analyzed_data) if analyzed_data else data
         return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
@@ -705,11 +726,33 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
-     Output('current-step', 'data', allow_duplicate=True),
-     Output('step-states', 'data', allow_duplicate=True)],
-    [Input('start-analysis-button', 'n_clicks')],
+     Output('current-step', 'data', allow_duplicate=True)],
+    [Input('quick-jump-step2', 'n_clicks')],
+    [State('analyzed-data', 'data'),
+     State('status-map', 'data'),
+     State('exclusion-reasons', 'data'),
+     State('system-excluded', 'data'),
+     State('evaluation-mode-store', 'data'),
+     State('step-states', 'data')],
     prevent_initial_call=True
 )
+
+
+def quick_jump_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons, 
+                        system_excluded, eval_mode, step_states):
+    if not n_clicks:
+        raise dash.exceptions.PreventUpdate
+    
+    df = pd.DataFrame(analyzed_data)
+    system_excluded = set(system_excluded)
+    
+    step2_layout = get_step2_layout(df, status_map, exclusion_reasons, 
+                                   system_excluded, eval_mode == 'manual')
+    
+    return [step2_layout, get_header_with_navigation(2, step_states), 2]
+
+
+
 def start_analysis(n_clicks):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
@@ -717,39 +760,53 @@ def start_analysis(n_clicks):
     step_states = {0: True, 1: True, 2: False, 3: False, 4: False}
     return [get_step0_layout(), get_header_with_navigation(0, step_states), 0, step_states]
 
-# Step 0 - PDF Upload and parsing
 @app.callback(
     [Output('pdf-comparison-area', 'children'),
      Output('pdf-parse-status', 'children'),
      Output('pdf-data', 'data'),
-     Output('step0-confirm-button', 'disabled')],
+     Output('step0-confirm-button', 'disabled'),
+     Output('pdf-confidence', 'data')],
     [Input('pdf-upload', 'contents')],
     [State('pdf-upload', 'filename'),
      State('analyzed-data', 'data')],
     prevent_initial_call=True
 )
-def handle_pdf_upload(contents, filename, current_data):
+def handle_file_upload(contents, filename, current_data):
     if not contents:
         raise dash.exceptions.PreventUpdate
     
-    pdf_df = parse_pdf_content(contents, filename)
+    # Parse file with confidence scoring
+    parsed_df, confidence, error_msg = parse_file_content(contents, filename)
     
-    if pdf_df is None:
+    if error_msg:
         return [
             None,
-            html.Div("Fehler beim Parsen der PDF-Datei", style={"color": "red"}),
+            html.Div(error_msg, style={"color": "red"}),
             None,
-            True
+            True,
+            0
         ]
     
     current_df = pd.DataFrame(current_data) if current_data else data
-    comparison = build_diff_table(pdf_df, current_df)
+    
+    # Use editable view if confidence < 0.95
+    if confidence < 0.95:
+        comparison = build_editable_diff_table(parsed_df, current_df, confidence)
+    else:
+        comparison = build_diff_table(parsed_df, current_df)
+    
+    status_msg = html.Div([
+        html.Span(f"✓ {filename} erfolgreich geladen", style={"color": "green"}),
+        html.Span(f" (Genauigkeit: {confidence:.1%})", 
+                 style={"marginLeft": "10px", "color": "#666"})
+    ])
     
     return [
         comparison,
-        html.Div(f"PDF erfolgreich geladen: {filename}", style={"color": "green"}),
-        pdf_df.to_dict('records'),
-        False
+        status_msg,
+        parsed_df.to_dict('records'),
+        False,
+        confidence
     ]
 
 # Step 0 - Database loading
@@ -783,7 +840,7 @@ def load_from_database(n_clicks, analysis_id):
     
     df = pd.DataFrame(liss_data)
     
-    step_states = {0: True, 1: True, 2: True, 3: True, 4: True}
+    step_states = {0: True, 1: True, 2: True, 3: False, 4: False}
     
     included = [ag for ag in ANTIGEN_COLUMNS if ag not in status_data.get('system_excluded', [])]
     excluded = status_data.get('system_excluded', [])
@@ -826,7 +883,7 @@ def proceed_from_step0(confirm_clicks, manual_clicks, pdf_data, lot_num):
     else:
         df = data
     
-    step_states = {0: True, 1: True, 2: True, 3: False, 4: False}
+    step_states = {0: True, 1: True, 2: True, 3: True, 4: False}
     
     return [
         get_step1_layout(df),
@@ -866,13 +923,15 @@ def update_evaluation_mode(mode):
     prevent_initial_call=True
 )
 def go_to_step2(n_clicks, table_data, current_step, eval_mode, step_states):
-    if not n_clicks or current_step != 1:
-        raise dash.exceptions.PreventUpdate
-    
+    # ... existing code ...
     df = pd.DataFrame(table_data)
     
-    if "Spendernummer" not in df.columns and "Spendernummer" in data.columns:
-        df.insert(0, "Spendernummer", data["Spendernummer"].values)
+    # Handle both old and new column names
+    if "spendernummer" not in df.columns and "Sp.Nr." not in df.columns:
+        if "spendernummer" in data.columns:
+            df.insert(0, "Sp.Nr.", data["spendernummer"].values)
+        elif "Sp.Nr." in data.columns:
+            df.insert(0, "Sp.Nr.", data["Sp.Nr."].values)
     
     status_map, exclusion_reasons, system_excluded = analyze_data(df, eval_mode == 'manual')
     
@@ -945,7 +1004,9 @@ def update_main_checklist_from_column_checkboxes(checkbox_values, system_exclude
     for values in checkbox_values:
         if values and isinstance(values, list) and len(values) > 0:
             selected_antigens.extend(values)
-    return [ag for ag in selected_antigens if ag != 'spendernummer']
+    
+    # Filter out Sp.Nr. and spendernummer
+    return [ag for ag in selected_antigens if ag not in ['Sp.Nr.', 'spendernummer']]
 
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
@@ -961,6 +1022,7 @@ def update_user_selections_from_main_checklist(selected_values, current_step):
     return selected_values
 
 # Selection buttons
+# Select all antigens button
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('select-all-button', 'n_clicks')],
@@ -970,8 +1032,16 @@ def update_user_selections_from_main_checklist(selected_values, current_step):
 def select_all_antigens(n_clicks, status_map):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
-    return list(status_map.keys())
+    
+    # Select all antigens from status_map, excluding Sp.Nr.
+    all_antigens = []
+    for ag in status_map.keys():
+        if ag not in ["Sp.Nr.", "spendernummer"]:
+            all_antigens.append(ag)
+    
+    return all_antigens
 
+# Deselect all antigens button
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('deselect-all-button', 'n_clicks')],
@@ -980,6 +1050,8 @@ def select_all_antigens(n_clicks, status_map):
 def deselect_all_antigens(n_clicks):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
+    
+    # Return empty list to deselect all
     return []
 
 @app.callback(
@@ -991,7 +1063,17 @@ def deselect_all_antigens(n_clicks):
 def default_selection(n_clicks, system_selection):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
-    return system_selection
+    
+    # Filter out Sp.Nr. from system selection
+    filtered_selection = []
+    if system_selection:
+        for ag in system_selection:
+            if ag not in ["Sp.Nr.", "spendernummer"]:
+                filtered_selection.append(ag)
+    
+    return filtered_selection
+
+
 
 # Step 2 -> Step 3
 @app.callback(
@@ -1008,22 +1090,37 @@ def default_selection(n_clicks, system_selection):
      State('step-states', 'data')],
     prevent_initial_call=True
 )
-def go_to_step3(n_clicks, analyzed_data, selected_antigens, user_selections, 
-                current_step, lot_number, step_states):
+
+def go_to_step3(n_clicks, analyzed_data, selected_antigens, user_selections, current_step, lot_number, step_states):
+    # Only proceed if the button was clicked and we are on the correct step
     if not n_clicks or current_step != 2:
         raise dash.exceptions.PreventUpdate
+
+    # Validate input data
+    if not analyzed_data or not isinstance(analyzed_data, list):
+        raise ValueError("Analyzed data must be a non-empty list of dictionaries.")
     
     df = pd.DataFrame(analyzed_data)
+
+    # Use only selected antigens, if any
     included_columns = selected_antigens if selected_antigens else []
-    excluded_columns = [ag for ag in ANTIGEN_COLUMNS if ag not in included_columns]
     
+    # ANTIGEN_COLUMNS must be defined somewhere globally in your app
+    if 'ANTIGEN_COLUMNS' not in globals():
+        raise NameError("ANTIGEN_COLUMNS is not defined.")
+    
+    excluded_columns = [ag for ag in ANTIGEN_COLUMNS if ag not in included_columns]
+
+    # Update step states for navigation
     step_states[3] = True
     step_states[4] = True
-    
-    step3_layout = get_step3_layout(df, included_columns, excluded_columns, 
-                                    user_selections, lot_number)
-    
+
+    # Generate the layout for step 3
+    step3_layout = get_step3_layout(df, included_columns, excluded_columns, user_selections, lot_number)
+
+    # Return the layout, navigation header, new current step, and updated step states
     return [step3_layout, get_header_with_navigation(3, step_states), 3, step_states]
+
 
 # Step 3 -> Step 2 (Back)
 @app.callback(
@@ -1123,7 +1220,16 @@ def save_to_database(n_clicks, analyzed_data, status_map, exclusion_reasons,
     db = next(get_db())
     
     df = pd.DataFrame(analyzed_data)
-    spendernummer = df['Spendernummer'].iloc[0] if 'Spendernummer' in df.columns else 'Unknown'
+    
+    # Handle both column names
+    spendernummer = None
+    if 'Sp.Nr.' in df.columns:
+        spendernummer = df['Sp.Nr.'].iloc[0]
+    elif 'spendernummer' in df.columns:
+        spendernummer = df['spendernummer'].iloc[0]
+    
+    if not spendernummer:
+        spendernummer = 'Unknown'
     
     donor = db.query(Donor).filter_by(spendernummer=spendernummer).first()
     if not donor:
@@ -1132,7 +1238,7 @@ def save_to_database(n_clicks, analyzed_data, status_map, exclusion_reasons,
     
     analysis = Analysis(
         spendernummer=spendernummer,
-        lot_number=lot_number
+        lot_number=lot_number  # Now properly saved with lot number
     )
     
     analysis.set_liss_data(analyzed_data)
@@ -1197,7 +1303,7 @@ def restart_analysis_from_step4(n_clicks, current_step):
     if not n_clicks or current_step != 4:
         raise dash.exceptions.PreventUpdate
     
-    step_states = {0: True, 1: False, 2: False, 3: False, 4: False}
+    step_states = {0: True, 1: True, 2: True, 3: True, 4: True}
     
     return [
         get_landing_page(),

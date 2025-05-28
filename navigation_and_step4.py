@@ -12,10 +12,7 @@ import io
 
 # Updated Header component with clickable steps
 def get_header_with_navigation(current_step=0, step_states=None):
-    """
-    Create header with clickable step navigation
-    step_states: dict with keys 0-4, values True/False indicating if step is accessible
-    """
+    """Create header with clickable step navigation"""
     if step_states is None:
         step_states = {0: True, 1: False, 2: False, 3: False, 4: False}
     
@@ -34,14 +31,19 @@ def get_header_with_navigation(current_step=0, step_states=None):
         is_clickable = step_states.get(step["number"], False)
         
         step_items.append(
-            html.Div([
-                html.Div(
-                    str(step["number"]), 
-                    className=f"step-number {'active' if is_active else ''} {'completed' if is_completed else ''}",
-                    id={"type": "step-nav", "index": step["number"]}
-                ),
-                html.Div(step["label"], className="step-label")
-            ], className=f"step-item {'active' if is_active else ''} {'disabled' if not is_clickable else ''}")
+            html.Button(
+                [
+                    html.Div(
+                        str(step["number"]), 
+                        className=f"step-number {'active' if is_active else ''} {'completed' if is_completed else ''}"
+                    ),
+                    html.Div(step["label"], className="step-label")
+                ],
+                id={"type": "step-nav", "index": step["number"]},
+                className=f"step-item {'active' if is_active else ''} {'disabled' if not is_clickable else ''}",
+                disabled=not is_clickable,
+                style={"background": "none", "border": "none", "padding": "0", "cursor": "pointer" if is_clickable else "not-allowed"}
+            )
         )
     
     progress_indicator = html.Div(step_items, className="progress-steps")
@@ -70,8 +72,29 @@ def get_step4_layout(df, status_map, exclusion_reasons, user_selections, lot_num
     # Create lab technical report content
     lab_report = create_lab_technical_report(df, status_map, exclusion_reasons, user_selections)
     
+    # Quick jump link component
+    quick_jump = html.Div([
+        html.Button(
+            "⇠ Zurück zu Schritt 2",
+            id="quick-jump-step2",
+            className="quick-jump-link",
+            style={
+                "background": "none",
+                "border": "none",
+                "color": "#2e8bc0",
+                "cursor": "pointer",
+                "fontSize": "14px",
+                "padding": "5px 10px",
+                "textDecoration": "underline"
+            }
+        )
+    ], style={"textAlign": "right", "marginBottom": "10px"})
+    
     return html.Div([
         html.H3("Schritt 4: Berichtserstellung", className="step-title"),
+        
+        # Add quick jump link
+        quick_jump,
         
         # Report header info
         html.Div([
