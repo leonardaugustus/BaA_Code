@@ -17,6 +17,46 @@ from navigation_and_step4 import (
     generate_pdf_report, create_medical_report, create_lab_technical_report
 )
 
+
+
+
+
+# Mapping of uppercase and lowercase letters to their superscript equivalents
+superscript_map = {
+    'A': 'ᴬ', 'B': 'ᴮ', 'C': 'ᶜ', 'D': 'ᴰ', 'E': 'ᴱ', 'F': 'ᶠ', 'G': 'ᴳ', 'H': 'ᴴ',
+    'I': 'ᴵ', 'J': 'ᴶ', 'K': 'ᴷ', 'L': 'ᴸ', 'M': 'ᴹ', 'N': 'ᴺ', 'O': 'ᴼ', 'P': 'ᴾ',
+    'R': 'ᴿ', 'T': 'ᵀ', 'U': 'ᵁ', 'V': 'ⱽ', 'W': 'ᵂ', 'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ',
+    'd': 'ᵈ', 'e': 'ᵉ', 'f': 'ᶠ', 'g': 'ᵍ', 'h': 'ʰ', 'i': 'ⁱ', 'j': 'ʲ', 'k': 'ᵏ',
+    'l': 'ˡ', 'm': 'ᵐ', 'n': 'ⁿ', 'o': 'ᵒ', 'p': 'ᵖ', 'r': 'ʳ', 's': 'ˢ', 't': 'ᵗ',
+    'u': 'ᵘ', 'v': 'ᵛ', 'w': 'ʷ', 'x': 'ˣ', 'y': 'ʸ', 'z': 'ᶻ'
+}
+
+def format_antigen(ag: str) -> str:
+    """Format antigen label so that the last character is in superscript."""
+    if len(ag) <= 1:
+        return ag
+    prefix = ag[:-1]
+    last_char = ag[-1]
+    superscript = superscript_map.get(last_char, last_char)
+    return f"{prefix}{superscript}"
+
+# Test with some examples for Formatting ***
+example_antigens = ["Lea", "JsB", "Jka", "FyB", "M", "K"]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Antigen Analyse Dashboard"
@@ -213,12 +253,10 @@ def build_liss_table(df):
     )
 
 def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
-    """Build the colored analysis table with antigen selection for Step 2"""
     df = prepare_data(df)
-    
     styles = []
     all_columns = list(df.columns)
-    
+
     header_checkboxes = html.Div(
         id="checkbox-container",
         style={
@@ -232,33 +270,33 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
         },
         children=[]
     )
-    
-    non_antigen_columns = [col for col in all_columns if col not in ANTIGEN_COLUMNS]
+
     for ag in ANTIGEN_COLUMNS:
         if ag in all_columns:
             status = status_map.get(ag, "")
-            is_excluded = ag in system_excluded  # Define is_excluded here
+            is_excluded = ag in system_excluded
             background_color = STATUS_COLORS.get(status, "#ffffff")
-            
+
             styles.append({
                 "if": {"column_id": ag},
                 "backgroundColor": background_color,
                 "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
             })
-            
-            # Skip Sp.Nr. for checkboxes
+
+            display_label = format_antigen(ag)
+
             if ag in ["Sp.Nr.", "spendernummer"]:
                 header_checkboxes.children.append(
                     html.Div([
                         html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
-                        html.Div(style={"height": "18px"})  # Empty space instead of checkbox
+                        html.Div(style={"height": "18px"})
                     ], style={"width": "40px", "display": "inline-block", "textAlign": "center"})
                 )
                 continue
-            
+
             header_checkboxes.children.append(
                 html.Div([
-                    html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
+                    html.Div(display_label, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
                     dcc.Checklist(
                         id={"type": "column-select", "index": ag},
                         options=[{"label": "", "value": ag}],
@@ -267,43 +305,38 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
                         style={"pointerEvents": "auto"}
                     )
                 ], style={
-                    "width": "40px", 
-                    "display": "inline-block", 
+                    "width": "40px",
+                    "display": "inline-block",
                     "textAlign": "center",
                     "opacity": "0.5" if is_excluded else "1"
                 })
             )
-    
+
     antigen_selector = html.Div([
         dcc.Checklist(
             id="antigen-select-checkboxes",
-            options=[{"label": ag, "value": ag} for ag in ANTIGEN_COLUMNS if ag != "spendernummer"],
+            options=[{"label": format_antigen(ag), "value": ag} for ag in ANTIGEN_COLUMNS if ag != "spendernummer"],
             value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"],
             style={"display": "none"}
         )
     ])
-    
-    columns = []
-    for col in df.columns:
-        col_def = {"name": col, "id": col, "editable": False}
-        columns.append(col_def)
-    
+
+    columns = [
+        {"name": format_antigen(col) if col in ANTIGEN_COLUMNS else col, "id": col, "editable": False}
+        for col in df.columns
+    ]
+
     style_cell_conditional = [
         {"if": {"column_id": "Spendernummer"}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "40px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "50px", "textAlign": "center"},
         {"if": {"column_id": "Spender"}, "width": "80px", "textAlign": "left"},
         {"if": {"column_id": "Spez. Antigen"}, "width": "100px", "textAlign": "left"},
-    ]
-    
-    style_cell_conditional.extend([{
+    ] + [{
         "if": {"column_id": col},
-        "minWidth": "40px",
-        "width": "40px",
-        "maxWidth": "40px",
-        "textAlign": "center",
-    } for col in ANTIGEN_COLUMNS])
-    
+        "minWidth": "40px", "width": "40px", "maxWidth": "40px", "textAlign": "center"
+    } for col in ANTIGEN_COLUMNS]
+
     return html.Div([
         antigen_selector,
         header_checkboxes,
@@ -322,27 +355,20 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
     ])
 
 def build_final_table(df, included_columns, user_selections=None):
-    """Build the final filtered table for Step 3 with reordered columns"""
-    # Reorder columns: Index first, then Sp.Nr.
     display_columns = ['Index']
-    
     if "Sp.Nr." in df.columns:
         display_columns.append('Sp.Nr.')
-    elif "spendernummer" in df.columns:  # Fallback for legacy data
+    elif "spendernummer" in df.columns:
         display_columns.append('spendernummer')
-    
     display_columns.extend(['Spender', 'LISS'])
     display_columns.extend(included_columns)
-    
     display_df = df[display_columns].copy()
-    
-    columns = []
-    for col in display_df.columns:
-        col_def = {"name": col, "id": col, "editable": False}
-        columns.append(col_def)
-    
-    
-        # 7. Update style_cell_conditional for Sp.Nr.
+
+    columns = [
+        {"name": format_antigen(col) if col in ANTIGEN_COLUMNS else col, "id": col, "editable": False}
+        for col in display_df.columns
+    ]
+
     style_cell_conditional = [
         {"if": {"column_id": "Sp.Nr."}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "spendernummer"}, "width": "60px", "textAlign": "center"},
@@ -350,22 +376,16 @@ def build_final_table(df, included_columns, user_selections=None):
         {"if": {"column_id": "Spendernummer"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Spender"}, "width": "120px", "textAlign": "left"},
-    ]
-    
-    style_cell_conditional.extend([{
+    ] + [{
         "if": {"column_id": col},
-        "minWidth": "40px",
-        "width": "40px",
-        "maxWidth": "40px",
-        "textAlign": "center",
-    } for col in included_columns])
-    
+        "minWidth": "40px", "width": "40px", "maxWidth": "40px", "textAlign": "center"
+    } for col in included_columns]
+
     style_data_conditional = []
     if user_selections:
         user_included = set(user_selections)
         system_included = set(included_columns)
         differences = user_included.symmetric_difference(system_included)
-        
         for col in differences:
             if col in display_df.columns:
                 style_data_conditional.append({
@@ -373,7 +393,7 @@ def build_final_table(df, included_columns, user_selections=None):
                     "backgroundColor": "#FFEB3B",
                     "border": "2px solid #FFC107"
                 })
-    
+
     return dash_table.DataTable(
         id="final-table",
         columns=columns,
