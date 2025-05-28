@@ -10,6 +10,23 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, 
 from reportlab.lib.units import cm
 import io
 
+
+
+
+def format_antigen(ag: str) -> str:
+    superscript_map = {
+        'A': 'ᴬ', 'B': 'ᴮ', 'C': 'ᶜ', 'D': 'ᴰ', 'E': 'ᴱ', 'F': 'ᶠ', 'G': 'ᴳ', 'H': 'ᴴ',
+        'I': 'ᴵ', 'J': 'ᴶ', 'K': 'ᴷ', 'L': 'ᴸ', 'M': 'ᴹ', 'N': 'ᴺ', 'O': 'ᴼ', 'P': 'ᴾ',
+        'R': 'ᴿ', 'T': 'ᵀ', 'U': 'ᵁ', 'V': 'ⱽ', 'W': 'ᵂ', 'a': 'ᵃ', 'b': 'ᵇ', 'c': 'ᶜ',
+        'd': 'ᵈ', 'e': 'ᵉ', 'f': 'ᶠ', 'g': 'ᵍ', 'h': 'ʰ', 'i': 'ⁱ', 'j': 'ʲ', 'k': 'ᵏ',
+        'l': 'ˡ', 'm': 'ᵐ', 'n': 'ⁿ', 'o': 'ᵒ', 'p': 'ᵖ', 'r': 'ʳ', 's': 'ˢ', 't': 'ᵗ',
+        'u': 'ᵘ', 'v': 'ᵛ', 'w': 'ʷ', 'x': 'ˣ', 'y': 'ʸ', 'z': 'ᶻ'
+    }
+    if len(ag) <= 1:
+        return ag
+    return ag[:-1] + superscript_map.get(ag[-1], ag[-1])
+
+
 # Updated Header component with clickable steps
 def get_header_with_navigation(current_step=0, step_states=None):
     """Create header with clickable step navigation"""
@@ -314,7 +331,7 @@ def create_exclusion_summary(exclusion_reasons, system_excluded):
         reason = exclusion_reasons.get(ag, "Unbekannter Grund")
         exclusion_items.append(
             html.Div([
-                html.Strong(f"{ag}: "),
+                html.Strong(f"{format_antigen(ag)}: "),
                 html.Span(f"Ausgeschlossen wegen {reason}")
             ], className="exclusion-item")
         )
