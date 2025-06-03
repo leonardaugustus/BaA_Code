@@ -219,7 +219,10 @@ Unchanged schema, but ensure:
 analyses.lot_number TEXT  -- persisted & non-null after Step 0
 
 
+#######################################
+version 4.0
 
+mainly buggs addressing
 
 
 

@@ -45,7 +45,7 @@ beim technischen report die Tabelle (original einfügen)
 
 
 3+ Antikörper vorhanden
-2+ Antikörper schwach vorhanden 
+2+ Antikörper sorhanden 
 
 
 

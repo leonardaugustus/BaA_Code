@@ -17,10 +17,6 @@ from navigation_and_step4 import (
     generate_pdf_report, create_medical_report, create_lab_technical_report
 )
 
-
-
-
-
 # Mapping of uppercase and lowercase letters to their superscript equivalents
 superscript_map = {
     'A': 'ᴬ', 'B': 'ᴮ', 'C': 'ᶜ', 'D': 'ᴰ', 'E': 'ᴱ', 'F': 'ᶠ', 'G': 'ᴳ', 'H': 'ᴴ',
@@ -40,37 +36,18 @@ def format_antigen(ag: str) -> str:
     superscript = superscript_map.get(last_char, last_char)
     return f"{prefix}{superscript}"
 
-# Test with some examples for Formatting ***
-example_antigens = ["Lea", "JsB", "Jka", "FyB", "M", "K"]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Antigen Analyse Dashboard"
 
-# Load default data
+# Load default data and update column names
 data = pd.read_csv("data.csv")
+if "spendernummer" in data.columns:
+    data = data.rename(columns={"spendernummer": "Sp.Nr."})
 
 # Setup options
 LISS_VALUES = ["-", "+/-", "1+", "2+", "3+", "4+"]
-ANTIGEN_COLUMNS = [col for col in data.columns if col not in ["Sp.Nr.", "spendernummer", "Spender", "Spez. Antigen", "Gen.", "LISS"]]
-
-
-
-
+ANTIGEN_COLUMNS = [col for col in data.columns if col not in ["Sp.Nr.", "Spender", "Spez. Antigen", "Gen.", "LISS"]]
 
 # Update the navigation module with ANTIGEN_COLUMNS
 import navigation_and_step4
@@ -86,7 +63,6 @@ STATUS_COLORS = {
 }
 
 # --- Utility functions ---
-# 2. Update prepare_data function to rename column
 def prepare_data(df):
     """Prepare and clean the dataframe"""
     df = df.copy()
@@ -94,6 +70,21 @@ def prepare_data(df):
     # Rename spendernummer to Sp.Nr. if it exists
     if "spendernummer" in df.columns:
         df = df.rename(columns={"spendernummer": "Sp.Nr."})
+    
+    # Ensure Index column is first, then Sp.Nr.
+    if "Index" not in df.columns and "LISS" in df.columns:
+        df.insert(0, "Index", range(1, len(df)+1))
+    
+    # Move Sp.Nr. to second position if not already there
+    if "Sp.Nr." in df.columns:
+        cols = df.columns.tolist()
+        if "Index" in cols:
+            cols.remove("Sp.Nr.")
+            cols.insert(1, "Sp.Nr.")
+        else:
+            cols.remove("Sp.Nr.")
+            cols.insert(0, "Sp.Nr.")
+        df = df[cols]
     
     if "Spez. Antigen" in df.columns:
         spez_antigen = df["Spez. Antigen"]
@@ -106,9 +97,6 @@ def prepare_data(df):
     if "LISS" in df.columns:
         df["LISS"] = df["LISS"].apply(lambda x: x if str(x).strip() in LISS_VALUES else "-")
     
-    if "Index" not in df.columns and "LISS" in df.columns:
-        df.insert(df.columns.get_loc("LISS") + 1, "Index", range(1, len(df)+1))
-    
     return df
 
 def analyze_data(df, manual_mode=False):
@@ -119,8 +107,6 @@ def analyze_data(df, manual_mode=False):
         system_excluded = set()
         
         for ag in ANTIGEN_COLUMNS:
-            if ag in ["Sp.Nr.", "spendernummer"]:  # Skip both variations
-                continue
             status_map[ag] = "Nicht ausgeschlossen"
         
         return status_map, exclusion_reasons, system_excluded
@@ -138,11 +124,6 @@ def analyze_data(df, manual_mode=False):
     
     exclusion_tracking = {col: [] for col in ANTIGEN_COLUMNS}
     negatives = df[df["LISS"] == "-"].drop(columns=["Spender", "Index", "Spez. Antigen", "LISS"], errors='ignore')
-    
-    spendernummer_map = {}
-    if "Spendernummer" in df.columns:
-        for idx, row in df.iterrows():
-            spendernummer_map[idx] = row.get("Spendernummer", idx + 1)
     
     system_excluded = set()
     for idx, row in negatives.iterrows():
@@ -174,14 +155,11 @@ def analyze_data(df, manual_mode=False):
     exclusion_reasons = {}
     
     for ag in ANTIGEN_COLUMNS:
-        if ag == "Spendernummer":
-            continue
-            
         positives = df[df["LISS"].isin(["+/-", "1+", "2+", "3+", "4+"])]
         
         if ag in system_excluded:
             status_map[ag] = "Ausgestrichen"
-            exclusion_reasons[ag] = f"Zeilen: {', '.join(map(str, sorted(set(exclusion_tracking[ag]))))}"
+            exclusion_reasons[ag] = f"Tz Nr: {', '.join(map(str, sorted(set(exclusion_tracking[ag]))))}"
         else:
             pos_count = sum(positives[ag].fillna('').astype(str) == "+")
             if pos_count >= 3:
@@ -200,15 +178,15 @@ def build_liss_table(df):
     """Build the data table for LISS selection in Step 1"""
     df = prepare_data(df)
     
-    # Don't drop Sp.Nr. column anymore
-    
     columns = []
     for col in df.columns:
+        # Apply superscript formatting to antigen column names
+        display_name = format_antigen(col) if col in ANTIGEN_COLUMNS else col
+        
         col_def = {
-            "name": col,
+            "name": display_name,
             "id": col,
-            # Only LISS and Spez. Antigen are editable, Sp.Nr. is NOT
-            "editable": col == "LISS" or col == "Spez. Antigen"
+            "editable": col in ["LISS", "Spez. Antigen"]
         }
         
         if col == "LISS":
@@ -226,6 +204,7 @@ def build_liss_table(df):
     
     style_cell_conditional = [
         {"if": {"column_id": "Index"}, "width": "60px", "textAlign": "center"},
+        {"if": {"column_id": "Sp.Nr."}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Spender"}, "width": "120px", "textAlign": "left"},
         {"if": {"column_id": "Spez. Antigen"}, "width": "150px", "textAlign": "left"},
@@ -285,7 +264,7 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
 
             display_label = format_antigen(ag)
 
-            if ag in ["Sp.Nr.", "spendernummer"]:
+            if ag in ["Sp.Nr."]:
                 header_checkboxes.children.append(
                     html.Div([
                         html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
@@ -315,8 +294,8 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
     antigen_selector = html.Div([
         dcc.Checklist(
             id="antigen-select-checkboxes",
-            options=[{"label": format_antigen(ag), "value": ag} for ag in ANTIGEN_COLUMNS if ag != "spendernummer"],
-            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"],
+            options=[{"label": format_antigen(ag), "value": ag} for ag in ANTIGEN_COLUMNS],
+            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded],
             style={"display": "none"}
         )
     ])
@@ -327,7 +306,7 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
     ]
 
     style_cell_conditional = [
-        {"if": {"column_id": "Spendernummer"}, "width": "60px", "textAlign": "center"},
+        {"if": {"column_id": "Sp.Nr."}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "40px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "50px", "textAlign": "center"},
         {"if": {"column_id": "Spender"}, "width": "80px", "textAlign": "left"},
@@ -355,14 +334,17 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
     ])
 
 def build_final_table(df, included_columns, user_selections=None):
+    """Build final table - only show rows with positive reactions"""
+    # Filter out rows with only negative reactions
+    positive_liss_values = {"+/-", "1+", "2+", "3+", "4+"}
+    df_filtered = df[df["LISS"].isin(positive_liss_values)].copy()
+    
     display_columns = ['Index']
-    if "Sp.Nr." in df.columns:
+    if "Sp.Nr." in df_filtered.columns:
         display_columns.append('Sp.Nr.')
-    elif "spendernummer" in df.columns:
-        display_columns.append('spendernummer')
     display_columns.extend(['Spender', 'LISS'])
     display_columns.extend(included_columns)
-    display_df = df[display_columns].copy()
+    display_df = df_filtered[display_columns].copy()
 
     columns = [
         {"name": format_antigen(col) if col in ANTIGEN_COLUMNS else col, "id": col, "editable": False}
@@ -370,10 +352,8 @@ def build_final_table(df, included_columns, user_selections=None):
     ]
 
     style_cell_conditional = [
-        {"if": {"column_id": "Sp.Nr."}, "width": "60px", "textAlign": "center"},
-        {"if": {"column_id": "spendernummer"}, "width": "60px", "textAlign": "center"},
+        {"if": {"column_id": "Sp.Nr."}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Index"}, "width": "60px", "textAlign": "center"},
-        {"if": {"column_id": "Spendernummer"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Spender"}, "width": "120px", "textAlign": "left"},
     ] + [{
@@ -515,7 +495,7 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded, manual_
         ], className="selection-buttons")
     ], className="antigen-selection-controls")
     
-    default_selected = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded and ag != "spendernummer"]
+    default_selected = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded]
     
     return html.Div([
         html.H3("Schritt 2: Analyse prüfen und Antigene auswählen", className="step-title"),
@@ -530,6 +510,7 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded, manual_
             html.Div(legend_items, className="legend-container")
         ], className="legend-section"),
         
+        # Place exclusion summary under the legend as requested
         create_exclusion_summary(exclusion_reasons, system_excluded),
         
         html.Div([
@@ -689,7 +670,6 @@ app.layout = html.Div([
      State('evaluation-mode-store', 'data')],
     prevent_initial_call=True
 )
-
 def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_data, 
                           status_map, exclusion_reasons, system_excluded, 
                           user_selections, lot_number, eval_mode):
@@ -734,12 +714,11 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
                 get_header_with_navigation(3, step_states), 3]
     elif step_num == 4:
         df = pd.DataFrame(analyzed_data)
-        return [get_step4_layout(df, status_map, exclusion_reasons, user_selections, lot_number),
+        return [get_step4_layout(df, status_map, exclusion_reasons, user_selections, 
+                                lot_number=lot_number, antigen_columns=ANTIGEN_COLUMNS),
                 get_header_with_navigation(4, step_states), 4]
     
     raise dash.exceptions.PreventUpdate
-
-# Replace the incorrect callback section starting at line ~735 with:
 
 # Quick jump callback
 @app.callback(
@@ -947,10 +926,9 @@ def update_evaluation_mode(mode):
     prevent_initial_call=True
 )
 def go_to_step2(n_clicks, table_data, current_step, eval_mode, step_states):
-    # Only continue after the user presses “LISS-Werte bestätigen”
     if not n_clicks or current_step != 1:
         raise dash.exceptions.PreventUpdate
-    # -----------------------------------------------------------------
+    
     df = pd.DataFrame(table_data)
     
     # Handle both old and new column names
@@ -1032,8 +1010,8 @@ def update_main_checklist_from_column_checkboxes(checkbox_values, system_exclude
         if values and isinstance(values, list) and len(values) > 0:
             selected_antigens.extend(values)
     
-    # Filter out Sp.Nr. and spendernummer
-    return [ag for ag in selected_antigens if ag not in ['Sp.Nr.', 'spendernummer']]
+    # Filter out Sp.Nr.
+    return [ag for ag in selected_antigens if ag not in ['Sp.Nr.']]
 
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
@@ -1049,7 +1027,6 @@ def update_user_selections_from_main_checklist(selected_values, current_step):
     return selected_values
 
 # Selection buttons
-# Select all antigens button
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
     [Input('select-all-button', 'n_clicks')],
@@ -1063,7 +1040,7 @@ def select_all_antigens(n_clicks, status_map):
     # Select all antigens from status_map, excluding Sp.Nr.
     all_antigens = []
     for ag in status_map.keys():
-        if ag not in ["Sp.Nr.", "spendernummer"]:
+        if ag not in ["Sp.Nr."]:
             all_antigens.append(ag)
     
     return all_antigens
@@ -1078,7 +1055,6 @@ def deselect_all_antigens(n_clicks):
     if not n_clicks:
         raise dash.exceptions.PreventUpdate
     
-    # Return empty list to deselect all
     return []
 
 @app.callback(
@@ -1095,12 +1071,10 @@ def default_selection(n_clicks, system_selection):
     filtered_selection = []
     if system_selection:
         for ag in system_selection:
-            if ag not in ["Sp.Nr.", "spendernummer"]:
+            if ag not in ["Sp.Nr."]:
                 filtered_selection.append(ag)
     
     return filtered_selection
-
-
 
 # Step 2 -> Step 3
 @app.callback(
@@ -1117,37 +1091,24 @@ def default_selection(n_clicks, system_selection):
      State('step-states', 'data')],
     prevent_initial_call=True
 )
-
 def go_to_step3(n_clicks, analyzed_data, selected_antigens, user_selections, current_step, lot_number, step_states):
-    # Only proceed if the button was clicked and we are on the correct step
     if not n_clicks or current_step != 2:
         raise dash.exceptions.PreventUpdate
 
-    # Validate input data
     if not analyzed_data or not isinstance(analyzed_data, list):
         raise ValueError("Analyzed data must be a non-empty list of dictionaries.")
     
     df = pd.DataFrame(analyzed_data)
 
-    # Use only selected antigens, if any
     included_columns = selected_antigens if selected_antigens else []
-    
-    # ANTIGEN_COLUMNS must be defined somewhere globally in your app
-    if 'ANTIGEN_COLUMNS' not in globals():
-        raise NameError("ANTIGEN_COLUMNS is not defined.")
-    
     excluded_columns = [ag for ag in ANTIGEN_COLUMNS if ag not in included_columns]
 
-    # Update step states for navigation
     step_states[3] = True
     step_states[4] = True
 
-    # Generate the layout for step 3
     step3_layout = get_step3_layout(df, included_columns, excluded_columns, user_selections, lot_number)
 
-    # Return the layout, navigation header, new current step, and updated step states
     return [step3_layout, get_header_with_navigation(3, step_states), 3, step_states]
-
 
 # Step 3 -> Step 2 (Back)
 @app.callback(
@@ -1177,7 +1138,7 @@ def go_back_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons,
     
     return [step2_layout, get_header_with_navigation(2, step_states), 2]
 
-# Step 3 -> Step 4
+# Step 3 -> Step 4 (FIXED - use keyword argument for lot_number)
 @app.callback(
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
@@ -1199,7 +1160,8 @@ def go_to_step4(n_clicks, analyzed_data, status_map, exclusion_reasons,
     
     df = pd.DataFrame(analyzed_data)
     step4_layout = get_step4_layout(df, status_map, exclusion_reasons, 
-                                   user_selections, lot_number)
+                                   user_selections, lot_number=lot_number, 
+                                   antigen_columns=ANTIGEN_COLUMNS)
     
     return [step4_layout, get_header_with_navigation(4, step_states), 4]
 
@@ -1221,7 +1183,7 @@ def download_pdf_report(n_clicks, analyzed_data, status_map, exclusion_reasons,
     
     df = pd.DataFrame(analyzed_data)
     pdf_bytes = generate_pdf_report(df, status_map, exclusion_reasons, 
-                                   user_selections, lot_number)
+                                   user_selections, lot_number=lot_number)
     
     filename = f"antigen_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
     
@@ -1265,7 +1227,7 @@ def save_to_database(n_clicks, analyzed_data, status_map, exclusion_reasons,
     
     analysis = Analysis(
         spendernummer=spendernummer,
-        lot_number=lot_number  # Now properly saved with lot number
+        lot_number=lot_number
     )
     
     analysis.set_liss_data(analyzed_data)
@@ -1351,7 +1313,7 @@ app.index_string = '''
         <title>{%title%}</title>
         {%favicon%}
         {%css%}
-        <link rel="stylesheet" href="/assets/styles.css">
+        <link rel="stylesheet" href="/assets/style.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     </head>
     <body>
