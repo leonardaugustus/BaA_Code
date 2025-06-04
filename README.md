@@ -1,10 +1,40 @@
 # BA
 BUGS
 ======================================================
-
-section 4, 5 instead of 4 args in main.py
-
-
+line 1074, in go_back_to_step1
+return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
+File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
+html.Div(id="step1-table-container", children=[build_liss_table(df)]),
+File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
+df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
+File "/home/augusut/miniconda3/envs/ba/lib/python3.9/site-packages/pandas/core/frame.py", line 5158, in insert
+raise ValueError(f"cannot insert {column}, already exists")
+cant go back to step 1 when in step two
+Traceback (most recent call last):
+  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 1074, in go_back_to_step1
+    return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
+  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
+    html.Div(id="step1-table-container", children=[build_liss_table(df)]),
+  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
+    df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
+  File "/home/augusut/miniconda3/envs/ba/lib/python3.9/site-packages/pandas/core/frame.py", line 5158, in insert
+    raise ValueError(f"cannot insert {column}, already exists")
+ValueError: cannot insert Tz.Nr. (Kopie), already exists
+return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
+File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
+html.Div(id="step1-table-container", children=[build_liss_table(df)]),
+File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
+df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
+Traceback (most recent call last):
+  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 1074, in go_back_to_step1
+    return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
+  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
+    html.Div(id="step1-table-container", children=[build_liss_table(df)]),
+  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
+    df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
+  File "/home/augusut/miniconda3/envs/ba/lib/python3.9/site-packages/pandas/core/frame.py", line 5158, in insert
+    raise ValueError(f"cannot insert {column}, already exists")
+ValueError: cannot insert Tz.Nr. (Kopie), already exists
 
 Reihenfolge:
 

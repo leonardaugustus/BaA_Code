@@ -1,4 +1,4 @@
-/* assets/style.css - Version 3.0 with Perfect Alignment */
+/* assets/style.css - Version 3.1 with Enhanced Table Styling */
 :root {
     --primary-color: #2e8bc0;
     --secondary-color: #145da0;
@@ -9,6 +9,8 @@
     --dark-color: #212529;
     --border-color: #dee2e6;
     --accent-color: #7209b7;
+    --light-blue-bg: #e3f2fd;
+    --toggle-row-bg: #f8f9fa;
 }
 
 body {
@@ -385,7 +387,7 @@ body {
     color: var(--danger-color);
 }
 
-/* DataTable customizations */
+/* ENHANCED: DataTable customizations for Step 2 checkbox integration */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td, 
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
     border: 1px solid var(--border-color);
@@ -394,6 +396,33 @@ body {
 
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header-name {
     font-weight: bold;
+}
+
+/* ENHANCED: Style for toggle row (first row with checkboxes) */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:first-child td {
+    background-color: var(--toggle-row-bg) !important;
+    border-bottom: 2px solid var(--border-color) !important;
+    font-weight: bold !important;
+    font-size: 16px !important;
+    cursor: pointer !important;
+    user-select: none !important;
+}
+
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner tr:first-child td:hover {
+    background-color: #e9ecef !important;
+}
+
+/* ENHANCED: Style for antigen column headers with light blue background */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:nth-child(n+4) {
+    background-color: var(--light-blue-bg) !important;
+    color: #1976d2 !important;
+    font-weight: bold !important;
+}
+
+/* Style for non-antigen headers (Tz.Nr., Sp.Nr., LISS, etc.) */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:nth-child(-n+3) {
+    background-color: var(--light-color) !important;
+    color: var(--dark-color) !important;
 }
 
 /* Superscript styling in tables */
@@ -415,7 +444,7 @@ body {
     z-index: 10 !important;
 }
 
-/* Checkbox styling */
+/* ENHANCED: Checkbox styling for toggle row */
 .column-checkbox {
     display: flex;
     justify-content: center;
@@ -431,7 +460,21 @@ body {
     accent-color: var(--primary-color);
 }
 
-/* Integrated Checkbox Table Header - CRITICAL for Step 2 */
+/* ENHANCED: Toggle row checkbox symbols styling */
+.toggle-checkbox-symbol {
+    font-size: 16px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.2s ease;
+    color: var(--primary-color);
+}
+
+.toggle-checkbox-symbol:hover {
+    transform: scale(1.2);
+    color: var(--secondary-color);
+}
+
+/* Integrated Checkbox Table Header - Updated for new approach */
 .integrated-checkbox-table {
     width: 100%;
     border-collapse: collapse;
@@ -440,7 +483,7 @@ body {
 }
 
 .integrated-checkbox-table th {
-    background-color: #e3f2fd;
+    background-color: var(--light-blue-bg);
     padding: 5px;
     text-align: center;
     border: 1px solid #dee2e6;
@@ -476,7 +519,7 @@ body {
 }
 
 .step4-reaction-table .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
-    background-color: #e3f2fd !important;
+    background-color: var(--light-blue-bg) !important;
     font-size: 11px !important;
     height: 30px !important;
     padding: 4px !important;
@@ -629,7 +672,7 @@ body {
     transform: scale(1.02);
 }
 
-/* Responsive design */
+/* ENHANCED: Responsive design with better table handling */
 @media (max-width: 768px) {
     .welcome-steps {
         flex-direction: column;
@@ -669,6 +712,17 @@ body {
         min-width: 35px !important;
         max-width: 35px !important;
     }
+    
+    /* Enhanced mobile table styling */
+    .dash-table-container {
+        font-size: 12px !important;
+    }
+    
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td,
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+        padding: 4px !important;
+        font-size: 10px !important;
+    }
 }
 
 @media (max-width: 480px) {
@@ -695,6 +749,17 @@ body {
         min-width: 30px !important;
         max-width: 30px !important;
     }
+    
+    /* Ultra-compact table for small screens */
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td,
+    .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+        padding: 2px !important;
+        font-size: 9px !important;
+    }
+    
+    .toggle-checkbox-symbol {
+        font-size: 14px;
+    }
 }
 
 /* Animation classes */
@@ -715,6 +780,17 @@ body {
 
 .pulse {
     animation: pulse 2s infinite;
+}
+
+/* ENHANCED: Checkbox toggle animation */
+@keyframes checkboxToggle {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+}
+
+.toggle-checkbox-symbol.animate {
+    animation: checkboxToggle 0.3s ease-out;
 }
 
 /* Success/Error message styling */

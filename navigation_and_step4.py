@@ -1,4 +1,4 @@
-# navigation_and_step4.py
+# navigation_and_step4.py - FIXED VERSION
 
 from __future__ import annotations
 
@@ -58,6 +58,13 @@ def format_antigen(antigen: str) -> str:  # noqa: D401 – simple function
     last_char = antigen[-1]
     formatted_char = _SUPERSCRIPT_MAP.get(last_char, last_char)
     return f"{prefix}{formatted_char}"
+
+def format_antigen_for_pdf(antigen: str) -> str:
+    """Format antigen for PDF - use plain text since PDF can't handle Unicode superscripts reliably."""
+    # For PDF, we'll use simpler formatting that's more reliable
+    if antigen == "P1":
+        return "P1"  # Keep as is for PDF
+    return antigen  # For PDF, keep original format
 
 def sort_antigens(antigen_list):
     """Sort antigens according to the predefined order."""
@@ -166,7 +173,7 @@ def get_header_with_navigation(
 def _guess_antigen_columns(df: pd.DataFrame) -> list[str]:
     """Best-effort guess which columns store antigen reactivity (+/−)."""
     # CORRECTED naming
-    ignored = {"Sp.Nr.", "LISS", "Tz.Nr.", "Spez. Antigen"}
+    ignored = {"Sp.Nr.", "LISS", "Tz.Nr.", "Tz.Nr. (Kopie)", "Spez. Antigen"}
     return [col for col in df.columns if col not in ignored]
 
 
@@ -349,7 +356,7 @@ def create_medical_report(
         ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")
     ]
 
-    # Create properly formatted antibody text with superscripts
+    # FIXED: Create properly formatted antibody text with superscripts
     antibody_text_parts = []
     if confirmed_3x:
         formatted_3x = [f"Anti-{format_antigen(ag)}" for ag in confirmed_3x]
@@ -377,7 +384,7 @@ def create_medical_report(
         # Add Tz.Nr. if available
         if "Tz.Nr." in row:
             record["Tz.Nr."] = row["Tz.Nr."]
-        # Add antigens in sorted order with formatting
+        # FIXED: Add antigens in sorted order with formatting
         for ag in sorted_selections:
             if ag in row:
                 record[format_antigen(ag)] = row[ag]
@@ -399,7 +406,7 @@ def create_medical_report(
         {"if": {"column_id": "LISS"}, "width": "60px"},
     ]
     
-    # Add antigen column styles
+    # Add antigen column styles with proper formatting
     for ag in sorted_selections:
         formatted_ag = format_antigen(ag)
         style_cell_conditional.append({
@@ -478,6 +485,7 @@ def create_lab_technical_report(
             "exclusion_reason": exclusion_reasons.get(ag, ""),
         }
 
+    # FIXED: Apply format_antigen to summary data
     summary_data = [
         {
             "Antigen": format_antigen(ag),
@@ -492,7 +500,7 @@ def create_lab_technical_report(
     system_selected = [ag for ag, status in status_map.items() if "Ausgestrichen" not in status]
     differences = set(user_selections).symmetric_difference(system_selected)
 
-    # DataTable conditional formatting for differences
+    # DataTable conditional formatting for differences with proper formatting
     highlight_styles = [
         {
             "if": {"filter_query": f'{{Antigen}} = "{format_antigen(ag)}"'},
@@ -509,7 +517,7 @@ def create_lab_technical_report(
             record["Tz.Nr."] = row["Tz.Nr."]
         record["Sp.Nr."] = row.get("Sp.Nr.", "")
         record["LISS"] = row.get("LISS", "")
-        # Add antigens in sorted order with formatting
+        # FIXED: Add antigens in sorted order with formatting
         for ag in sorted_antigen_columns:
             if ag in row:
                 record[format_antigen(ag)] = row[ag]
@@ -530,7 +538,7 @@ def create_lab_technical_report(
         {"if": {"column_id": "LISS"}, "width": "50px"},
     ]
     
-    # Add antigen column styles
+    # Add antigen column styles with proper formatting
     for ag in sorted_antigen_columns:
         formatted_ag = format_antigen(ag)
         original_style_cell_conditional.append({
@@ -649,7 +657,7 @@ def generate_pdf_report(
     )
     story.extend([tbl, Spacer(1, 20)])
 
-    # Medical section with distinct 3x and 2x findings, sorted
+    # FIXED: Medical section with distinct 3x and 2x findings, sorted, and properly formatted
     story.append(Paragraph("Medizinischer Bericht", styles["Heading2"]))
 
     sorted_selections = sort_antigens(user_selections)
@@ -657,18 +665,64 @@ def generate_pdf_report(
     confirmed_2x = [ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
 
     if confirmed_3x:
-        # Format antigens for PDF (can't use Unicode superscripts reliably in PDF)
-        formatted_3x = [f"Anti-{ag}" for ag in confirmed_3x]
+        # FIXED: Format antigens for PDF with proper formatting
+        formatted_3x = [f"Anti-{format_antigen_for_pdf(ag)}" for ag in confirmed_3x]
         antibody_3x_text = "3+ Antikörper vorhanden: " + ", ".join(formatted_3x)
         story.append(Paragraph(antibody_3x_text, styles["Normal"]))
     
     if confirmed_2x:
-        formatted_2x = [f"Anti-{ag}" for ag in confirmed_2x]
+        # FIXED: Format antigens for PDF with proper formatting
+        formatted_2x = [f"Anti-{format_antigen_for_pdf(ag)}" for ag in confirmed_2x]
         antibody_2x_text = "2+ Antikörper vorhanden: " + ", ".join(formatted_2x)
         story.append(Paragraph(antibody_2x_text, styles["Normal"]))
 
     if not confirmed_3x and not confirmed_2x:
         story.append(Paragraph("Keine Antikörper nachgewiesen", styles["Normal"]))
+
+    story.append(Spacer(1, 20))
+
+    # FIXED: Add reaction table to PDF with proper formatting
+    story.append(Paragraph("Antigen-Reaktionstabelle", styles["Heading3"]))
+    
+    # Build table data for PDF
+    positive_liss_values = {"+/-", "1+", "2+", "3+", "4+"}
+    table_data = []
+    
+    # Header row with properly formatted antigen names
+    header_row = ["Tz.Nr.", "Sp.Nr.", "LISS"]
+    header_row.extend([format_antigen_for_pdf(ag) for ag in sorted_selections])
+    table_data.append(header_row)
+    
+    # Data rows
+    for _, row in df.iterrows():
+        liss_val = row.get("LISS", "-")
+        if liss_val not in positive_liss_values:
+            continue
+            
+        data_row = [
+            str(row.get("Tz.Nr.", "")),
+            str(row.get("Sp.Nr.", "")),
+            str(liss_val)
+        ]
+        data_row.extend([str(row.get(ag, "")) for ag in sorted_selections])
+        table_data.append(data_row)
+    
+    if len(table_data) > 1:  # If we have data beyond the header
+        pdf_table = Table(table_data)
+        pdf_table.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 1), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ])
+        )
+        story.append(pdf_table)
 
     story.append(Spacer(1, 20))
 
@@ -724,7 +778,7 @@ def create_provisional_report(
     confirmed_3x = [ag for ag in sorted_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
     confirmed_2x = [ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
 
-    # Create distinct reports for 2x and 3x as requested with proper formatting
+    # FIXED: Create distinct reports for 2x and 3x as requested with proper formatting
     report_sections = []
     
     if confirmed_3x:

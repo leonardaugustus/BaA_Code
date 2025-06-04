@@ -1,4 +1,4 @@
-# main.py
+# main.py - FIXED VERSION
 import dash
 from dash import dcc, html, Input, Output, State, dash_table, callback_context, ALL, MATCH
 import pandas as pd
@@ -204,20 +204,19 @@ def analyze_data(df, manual_mode=False):
 
 # --- Build table components ---
 def build_liss_table(df):
-    """Build the data table for LISS selection in Step 1 - FIXED: No Index, added duplicate Sp.Nr."""
+    """Build the data table for LISS selection in Step 1 - FIXED: Row index column"""
     df = prepare_data(df)
     
     # Remove Index column if it exists
     if "Index" in df.columns:
         df = df.drop(columns=["Index"])
     
-    # Add duplicate Sp.Nr. column immediately after LISS
-    if "LISS" in df.columns and "Sp.Nr." in df.columns:
+    # FIXED: Add row index column immediately after LISS (showing row numbers)
+    if "LISS" in df.columns:
         liss_idx = df.columns.get_loc("LISS")
-        # Create new column order with Sp.Nr. copy after LISS
-        cols = df.columns.tolist()
-        sp_nr_copy = df["Sp.Nr."].copy()
-        df.insert(liss_idx + 1, "Sp.Nr. (2)", sp_nr_copy)
+        # Create row index column (1-based numbering for user display)
+        row_index = pd.Series(range(1, len(df) + 1), name="Tz.Nr. (Kopie)")
+        df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
     
     columns = []
     for col in df.columns:
@@ -246,7 +245,7 @@ def build_liss_table(df):
     style_cell_conditional = [
         {"if": {"column_id": "Tz.Nr."}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Sp.Nr."}, "width": "120px", "textAlign": "left"},
-        {"if": {"column_id": "Sp.Nr. (2)"}, "width": "120px", "textAlign": "left"},
+        {"if": {"column_id": "Tz.Nr. (Kopie)"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Spez. Antigen"}, "width": "150px", "textAlign": "left"},
     ]
@@ -275,46 +274,52 @@ def build_liss_table(df):
     )
 
 def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
-    """Build analysis table with integrated checkboxes - FIXED: No Index, integrated checkboxes"""
+    """Build analysis table with integrated checkboxes - SIMPLIFIED VERSION"""
     df = prepare_data(df)
     
     # Remove Index column if it exists
     if "Index" in df.columns:
         df = df.drop(columns=["Index"])
     
-    styles = []
-    all_columns = list(df.columns)
+    # FIXED: Add row index column for Step 2 as well
+    if "LISS" in df.columns and "Tz.Nr. (Kopie)" not in df.columns:
+        liss_idx = df.columns.get_loc("LISS")
+        row_index = pd.Series(range(1, len(df) + 1), name="Tz.Nr. (Kopie)")
+        df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
 
-    # Build the table with integrated checkbox header row
-    antigen_selector = html.Div([
-        dcc.Checklist(
-            id="antigen-select-checkboxes",
-            options=[{"label": format_antigen(ag), "value": ag} for ag in ANTIGEN_COLUMNS],
-            value=[ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded],
-            style={"display": "none"}
-        )
-    ])
-
-    # Create columns with integrated checkbox for antigens
+    # Build columns
     columns = []
     for col in df.columns:
         display_name = format_antigen(col) if col in ANTIGEN_COLUMNS else col
         col_def = {"name": display_name, "id": col, "editable": False}
         columns.append(col_def)
 
-    # Add styling for status colors
+    # Add styling for status colors - SIMPLIFIED
+    style_data_conditional = []
+    
     for col in ANTIGEN_COLUMNS:
         if col in df.columns:
             status = status_map.get(col, "")
-            styles.append({
+            style_data_conditional.append({
                 "if": {"column_id": col},
                 "backgroundColor": STATUS_COLORS.get(status, "#ffffff"),
                 "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
+            })
+    
+    # Style antigen headers with light blue background
+    style_header_conditional = []
+    for col in ANTIGEN_COLUMNS:
+        if col in df.columns:
+            style_header_conditional.append({
+                "if": {"column_id": col},
+                "backgroundColor": "#e3f2fd",
+                "color": "#1976d2"
             })
 
     style_cell_conditional = [
         {"if": {"column_id": "Tz.Nr."}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Sp.Nr."}, "width": "120px", "textAlign": "left"},
+        {"if": {"column_id": "Tz.Nr. (Kopie)"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Spez. Antigen"}, "width": "150px", "textAlign": "left"},
     ] + [
@@ -324,61 +329,29 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
         } for col in ANTIGEN_COLUMNS
     ]
 
-    # Create checkbox row that aligns perfectly with table columns
-    checkbox_cells = []
-    for col in df.columns:
-        if col in ANTIGEN_COLUMNS:
-            status = status_map.get(col, "")
-            is_excluded = col in system_excluded
-            
-            checkbox_cells.append(
-                html.Th([
-                    dcc.Checklist(
-                        id={"type": "column-select", "index": col},
-                        options=[{"label": "", "value": col}],
-                        value=[col] if (col not in system_excluded) else [],
-                        style={
-                            "display": "flex", 
-                            "justifyContent": "center",
-                            "opacity": "0.5" if is_excluded else "1"
-                        }
-                    )
-                ], style={
-                    "width": "40px", 
-                    "textAlign": "center",
-                    "padding": "5px",
-                    "backgroundColor": "#e3f2fd"
-                })
-            )
-        else:
-            # Empty cell for non-antigen columns
-            checkbox_cells.append(
-                html.Th("", style={
-                    "backgroundColor": "#f8f9fa",
-                    "border": "1px solid #dee2e6"
-                })
-            )
-
-    checkbox_header_row = html.Table([
-        html.Thead([
-            html.Tr(checkbox_cells, style={"height": "40px"})
-        ])
-    ], style={
-        "width": "100%", 
-        "borderCollapse": "collapse",
-        "marginBottom": "0px"
-    })
+    default_selected = [ag for ag in ANTIGEN_COLUMNS if ag not in system_excluded]
 
     return html.Div([
-        antigen_selector,
         html.H4("Antigene auswählen:", className="section-title"),
-        html.P("Wählen Sie die Antigene aus, die im finalen Ergebnis angezeigt werden sollen:"),
+        html.P("Verwenden Sie die Buttons unten, um Antigene auszuwählen:"),
         html.Div([
             html.Button("Alle auswählen", id="select-all-button", className="selection-button"),
             html.Button("Alle abwählen", id="deselect-all-button", className="selection-button"),
             html.Button("Standard-Auswahl", id="default-selection-button", className="selection-button"),
         ], className="selection-buttons"),
-        checkbox_header_row,
+        
+        # Visible checklist for antigen selection
+        html.Div([
+            html.H5("Ausgewählte Antigene:"),
+            dcc.Checklist(
+                id="antigen-select-checkboxes",
+                options=[{"label": format_antigen(ag), "value": ag} for ag in ANTIGEN_COLUMNS],
+                value=default_selected,
+                inline=True,
+                style={"display": "flex", "flexWrap": "wrap", "gap": "10px"}
+            )
+        ], style={"marginBottom": "20px", "padding": "15px", "backgroundColor": "#f8f9fa", "borderRadius": "6px"}),
+        
         dash_table.DataTable(
             id="analysis-table",
             columns=columns,
@@ -387,8 +360,9 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
             style_table={"maxWidth": "1100px", "margin": "0", "overflowX": "auto"},
             style_cell={"textAlign": "center", "height": "35px"},
             style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
+            style_header_conditional=style_header_conditional,
             style_cell_conditional=style_cell_conditional,
-            style_data_conditional=styles,
+            style_data_conditional=style_data_conditional,
             page_size=15
         )
     ])
@@ -568,7 +542,7 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded, manual_
         html.Div([
             html.H4(["Antigen-Analyse Übersicht und Auswahl:", analysis_tooltip], 
                    className="section-title with-tooltip"),
-            html.P("Die Tabelle zeigt die Analyseergebnisse für alle Antigene."),
+            html.P("Die erste Zeile enthält Checkboxen zur Auswahl der Antigene."),
         ]),
         
         html.Div(id="analysis-table-container", className="analysis-table-container", 
@@ -594,6 +568,7 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded, manual_
 
 def get_step3_layout(df, included_columns, excluded_columns, user_selections=None, lot_number=""):
     """Build step 3 layout with corrected formatting"""
+    # Better null/undefined handling
     if included_columns is None:
         included_columns = []
     if excluded_columns is None:
@@ -601,9 +576,10 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
     if user_selections is None:
         user_selections = []
     
-    included_columns = list(included_columns) if isinstance(included_columns, (list, set, tuple)) else []
-    excluded_columns = list(excluded_columns) if isinstance(excluded_columns, (list, set, tuple)) else []
-    user_selections = list(user_selections) if isinstance(user_selections, (list, set, tuple)) else []
+    # Ensure all are lists and contain only valid strings
+    included_columns = [col for col in (included_columns if isinstance(included_columns, (list, set, tuple)) else []) if isinstance(col, str)]
+    excluded_columns = [col for col in (excluded_columns if isinstance(excluded_columns, (list, set, tuple)) else []) if isinstance(col, str)]
+    user_selections = [col for col in (user_selections if isinstance(user_selections, (list, set, tuple)) else []) if isinstance(col, str)]
     
     differences = []
     if user_selections:
@@ -612,12 +588,13 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
         differences = list(user_included.symmetric_difference(system_included))
     
     try:
-        # Apply format_antigen to all antigen lists
+        # Apply format_antigen to all antigen lists with error handling
         included_str = ", ".join([format_antigen(ag) for ag in sort_antigens(included_columns)]) if included_columns else "Keine"
         user_str = ", ".join([format_antigen(ag) for ag in sort_antigens(user_selections)]) if user_selections else "Keine"
         diff_str = ", ".join([format_antigen(ag) for ag in sort_antigens(differences)]) if differences else "Keine"
         excluded_str = ", ".join([format_antigen(ag) for ag in sort_antigens(excluded_columns)]) if excluded_columns else "Keine"
-    except Exception:
+    except Exception as e:
+        print(f"Error formatting antigen strings: {e}")
         included_str = "Keine"
         user_str = "Keine"
         diff_str = "Keine"
@@ -706,6 +683,65 @@ app.layout = html.Div([
     html.Div(id="dummy-div", style={"display": "none"}),
     html.Div(id="dummy-output", style={"display": "none"})
 ], className="dashboard-container")
+
+# FIXED: New callback for handling checkbox clicks in the toggle row
+@app.callback(
+    [Output('antigen-select-checkboxes', 'value'),
+     Output('analysis-table', 'data')],
+    [Input('analysis-table', 'data')],
+    [State('system-excluded', 'data'),
+     State('status-map', 'data'),
+     State('analyzed-data', 'data')],
+    prevent_initial_call=True
+)
+def handle_table_checkbox_clicks(table_data, system_excluded, status_map, analyzed_data):
+    if not table_data or len(table_data) == 0:
+        raise dash.exceptions.PreventUpdate
+    
+    try:
+        # Get the toggle row (first row)
+        toggle_row = table_data[0] if isinstance(table_data, list) else {}
+        
+        # Extract selected antigens from toggle row
+        selected_antigens = []
+        for col in ANTIGEN_COLUMNS:
+            if col in toggle_row and toggle_row[col] == "☑":
+                selected_antigens.append(col)
+        
+        # Update table data to ensure consistency
+        updated_table_data = []
+        
+        # Rebuild toggle row based on current selections
+        new_toggle_row = {}
+        if isinstance(toggle_row, dict):
+            for col in toggle_row.keys():
+                if col in ANTIGEN_COLUMNS:
+                    new_toggle_row[col] = "☑" if col in selected_antigens else "☐"
+                else:
+                    new_toggle_row[col] = ""
+        
+        updated_table_data.append(new_toggle_row)
+        
+        # Add back the original data rows (excluding toggle row)
+        if analyzed_data and isinstance(analyzed_data, list):
+            df = pd.DataFrame(analyzed_data)
+            if "Index" in df.columns:
+                df = df.drop(columns=["Index"])
+            
+            # Add row index column if not present
+            if "LISS" in df.columns and "Tz.Nr. (Kopie)" not in df.columns:
+                liss_idx = df.columns.get_loc("LISS")
+                row_index = pd.Series(range(1, len(df) + 1), name="Tz.Nr. (Kopie)")
+                df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
+            
+            updated_table_data.extend(df.to_dict("records"))
+        
+        return selected_antigens, updated_table_data
+        
+    except Exception as e:
+        print(f"Error in handle_table_checkbox_clicks: {e}")
+        # Return current state if error occurs
+        return dash.no_update, dash.no_update
 
 # --- Callbacks --- (keeping all existing callbacks with corrected naming)
 
@@ -1043,35 +1079,25 @@ def go_back_to_step1(n_clicks, analyzed_data, current_step, step_states):
     [Input('user-selections', 'data')]
 )
 def update_selected_antigens_display(selected_antigens):
-    if not selected_antigens:
+    # Add better error handling for undefined/null values
+    if not selected_antigens or selected_antigens is None:
         return "Keine Antigene ausgewählt"
     
     try:
-        if isinstance(selected_antigens, list):
-            sorted_antigens = sort_antigens(selected_antigens)
+        if isinstance(selected_antigens, list) and len(selected_antigens) > 0:
+            # Filter out any non-string values
+            valid_antigens = [ag for ag in selected_antigens if isinstance(ag, str) and ag.strip()]
+            if not valid_antigens:
+                return "Keine Antigene ausgewählt"
+            
+            sorted_antigens = sort_antigens(valid_antigens)
             formatted_antigens = [format_antigen(ag) for ag in sorted_antigens]
             return ", ".join(formatted_antigens)
         else:
             return "Keine Antigene ausgewählt"
-    except Exception:
+    except Exception as e:
+        print(f"Error in update_selected_antigens_display: {e}")
         return "Keine Antigene ausgewählt"
-
-# FIXED: Checkbox synchronization - proper integration
-@app.callback(
-    Output('antigen-select-checkboxes', 'value'),
-    [Input({'type': 'column-select', 'index': ALL}, 'value')],
-    [State('system-excluded', 'data')],
-    prevent_initial_call=True
-)
-def update_main_checklist_from_column_checkboxes(checkbox_values, system_excluded):
-    system_excluded = system_excluded or []
-    selected_antigens = []
-    for values in checkbox_values:
-        if values and isinstance(values, list) and len(values) > 0:
-            selected_antigens.extend(values)
-    
-    # Filter out Tz.Nr.
-    return [ag for ag in selected_antigens if ag not in ['Tz.Nr.']]
 
 @app.callback(
     Output('user-selections', 'data', allow_duplicate=True),
@@ -1086,43 +1112,61 @@ def update_user_selections_from_main_checklist(selected_values, current_step):
         selected_values = []
     return selected_values
 
-# FIXED: Selection buttons now control header checkboxes directly
+# FIXED: Selection buttons now control checkboxes properly
 @app.callback(
-    [Output({'type': 'column-select', 'index': ALL}, 'value'),
-     Output('user-selections', 'data', allow_duplicate=True)],
+    [Output('antigen-select-checkboxes', 'value', allow_duplicate=True),
+     Output('analysis-table', 'data', allow_duplicate=True)],
     [Input('select-all-button', 'n_clicks'),
      Input('deselect-all-button', 'n_clicks'),
      Input('default-selection-button', 'n_clicks')],
     [State('status-map', 'data'),
      State('selected-antigens', 'data'),
-     State('system-excluded', 'data')],
+     State('system-excluded', 'data'),
+     State('analysis-table', 'data')],
     prevent_initial_call=True
 )
-def handle_selection_buttons(select_all, deselect_all, default_sel, status_map, system_selection, system_excluded):
+def handle_selection_buttons(select_all, deselect_all, default_sel, status_map, system_selection, system_excluded, current_table_data):
     ctx = callback_context
     if not ctx.triggered:
         raise dash.exceptions.PreventUpdate
     
-    button_id = ctx.triggered[0]['prop_id'].split('.')[0]
-    
-    if button_id == 'select-all-button':
-        # Select all antigens
-        all_antigens = [ag for ag in status_map.keys() if ag not in ["Tz.Nr."]]
-        checkbox_values = [[ag] if ag in all_antigens else [] for ag in ANTIGEN_COLUMNS]
-        return checkbox_values, all_antigens
-    
-    elif button_id == 'deselect-all-button':
-        # Deselect all antigens
-        checkbox_values = [[] for _ in ANTIGEN_COLUMNS]
-        return checkbox_values, []
-    
-    elif button_id == 'default-selection-button':
-        # Use system selection
-        filtered_selection = [ag for ag in (system_selection or []) if ag not in ["Tz.Nr."]]
-        checkbox_values = [[ag] if ag in filtered_selection else [] for ag in ANTIGEN_COLUMNS]
-        return checkbox_values, filtered_selection
-    
-    raise dash.exceptions.PreventUpdate
+    try:
+        button_id = ctx.triggered[0]['prop_id'].split('.')[0]
+        
+        # Determine selected antigens based on button clicked
+        if button_id == 'select-all-button':
+            # Select all antigens
+            all_antigens = [ag for ag in (status_map.keys() if status_map else []) if ag not in ["Tz.Nr."]]
+            selected_antigens = all_antigens
+        elif button_id == 'deselect-all-button':
+            # Deselect all antigens
+            selected_antigens = []
+        elif button_id == 'default-selection-button':
+            # Use system selection
+            selected_antigens = [ag for ag in (system_selection or []) if ag not in ["Tz.Nr."]]
+        else:
+            raise dash.exceptions.PreventUpdate
+        
+        # Update table data
+        if current_table_data and len(current_table_data) > 0:
+            updated_table_data = current_table_data.copy() if isinstance(current_table_data, list) else []
+            
+            if len(updated_table_data) > 0:
+                # Update toggle row (first row)
+                toggle_row = updated_table_data[0].copy() if isinstance(updated_table_data[0], dict) else {}
+                for col in ANTIGEN_COLUMNS:
+                    if col in toggle_row:
+                        toggle_row[col] = "☑" if col in selected_antigens else "☐"
+                
+                updated_table_data[0] = toggle_row
+                
+                return selected_antigens, updated_table_data
+        
+        return selected_antigens, current_table_data
+        
+    except Exception as e:
+        print(f"Error in handle_selection_buttons: {e}")
+        return dash.no_update, dash.no_update
 
 # Step 2 -> Step 3
 @app.callback(
