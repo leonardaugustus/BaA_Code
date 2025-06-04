@@ -16,20 +16,24 @@ Base = declarative_base()
 class Donor(Base):
     __tablename__ = 'donors'
     
+    # NOTE: Database field name kept as 'spendernummer' for consistency with existing data
+    # In UI, this is displayed as "Tz.Nr." (Tabellenzeilen-Nummer)
     spendernummer = Column(String, primary_key=True)
-    name = Column(String)
+    name = Column(String)  # In UI, this maps to "Sp.Nr." (actual Spender number)
     notes = Column(Text)
     
     # Relationship
     analyses = relationship("Analysis", back_populates="donor")
     
     def __repr__(self):
-        return f"<Donor(spendernummer='{self.spendernummer}', name='{self.name}')>"
+        return f"<Donor(tz_nr='{self.spendernummer}', sp_nr='{self.name}')>"
 
 class Analysis(Base):
     __tablename__ = 'analyses'
     
     id = Column(Integer, primary_key=True)
+    # NOTE: Database field name kept as 'spendernummer' for consistency with existing data
+    # In UI, this represents "Tz.Nr." (Tabellenzeilen-Nummer)
     spendernummer = Column(String, ForeignKey('donors.spendernummer'))
     timestamp = Column(DateTime, default=func.now())
     lot_number = Column(Text, nullable=True)  # Explicitly nullable for legacy rows
@@ -90,7 +94,7 @@ class Analysis(Base):
             self.user_sel_json = None
     
     def __repr__(self):
-        return f"<Analysis(id={self.id}, spendernummer='{self.spendernummer}', timestamp='{self.timestamp}')>"
+        return f"<Analysis(id={self.id}, tz_nr='{self.spendernummer}', timestamp='{self.timestamp}')>"
 
 # Database connection
 DATABASE_URL = "sqlite:///antigen_analysis.db"  # Can be changed to PostgreSQL

@@ -431,53 +431,68 @@ body {
     accent-color: var(--primary-color);
 }
 
-/* Perfect Checkbox Container Alignment - CRITICAL for Step 2 */
-#checkbox-container {
-    background-color: #f8f9fa;
-    padding: 8px 0;
-    border-radius: 4px;
-    margin-bottom: 10px;
+/* Integrated Checkbox Table Header - CRITICAL for Step 2 */
+.integrated-checkbox-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 0px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    /* Grid layout is set dynamically in JavaScript for perfect alignment */
-    display: grid;
-    align-items: center;
-    gap: 0;
-    overflow-x: auto;
-    white-space: nowrap;
 }
 
-#checkbox-container > div {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 40px;
-    font-size: 11px;
-    line-height: 1.2;
-}
-
-/* Ensure checkbox containers maintain perfect alignment */
-#checkbox-container .column-checkbox {
-    margin: 0;
-    padding: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-#checkbox-container .column-checkbox input[type="checkbox"] {
-    margin: 0;
-    padding: 0;
-}
-
-/* Antigen label formatting in checkboxes */
-#checkbox-container > div > div:first-child {
+.integrated-checkbox-table th {
+    background-color: #e3f2fd;
+    padding: 5px;
     text-align: center;
+    border: 1px solid #dee2e6;
     font-size: 11px;
-    line-height: 1.2;
-    margin-bottom: 2px;
-    word-break: break-word;
-    overflow-wrap: break-word;
+    height: 40px;
+    vertical-align: middle;
+}
+
+.integrated-checkbox-table .checkbox-cell {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+}
+
+.integrated-checkbox-table .empty-cell {
+    background-color: #f8f9fa;
+}
+
+/* Checkbox styling within integrated table */
+.integrated-checkbox-table input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    margin: 0;
+    accent-color: var(--primary-color);
+}
+
+/* Step 4 reaction table styling - single page fit */
+.step4-reaction-table {
+    max-height: 400px;
+    height: 400px;
+    overflow-y: auto;
+}
+
+.step4-reaction-table .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+    background-color: #e3f2fd !important;
+    font-size: 11px !important;
+    height: 30px !important;
+    padding: 4px !important;
+}
+
+.step4-reaction-table .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td {
+    font-size: 11px !important;
+    height: 25px !important;
+    padding: 4px !important;
+}
+
+/* Compact antigen columns for Step 4 */
+.step4-antigen-column {
+    width: 35px !important;
+    min-width: 35px !important;
+    max-width: 35px !important;
 }
 
 /* Tooltip styling */
@@ -649,8 +664,10 @@ body {
         gap: 10px;
     }
     
-    #checkbox-container {
-        grid-template-columns: repeat(auto-fit, minmax(35px, 1fr)) !important;
+    .integrated-checkbox-table .checkbox-cell {
+        width: 35px !important;
+        min-width: 35px !important;
+        max-width: 35px !important;
     }
 }
 
@@ -673,8 +690,10 @@ body {
         height: 35px;
     }
     
-    #checkbox-container {
-        grid-template-columns: repeat(auto-fit, minmax(30px, 1fr)) !important;
+    .integrated-checkbox-table .checkbox-cell {
+        width: 30px !important;
+        min-width: 30px !important;
+        max-width: 30px !important;
     }
 }
 

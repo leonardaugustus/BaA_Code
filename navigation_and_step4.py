@@ -165,7 +165,8 @@ def get_header_with_navigation(
 
 def _guess_antigen_columns(df: pd.DataFrame) -> list[str]:
     """Best-effort guess which columns store antigen reactivity (+/−)."""
-    ignored = {"Spender", "LISS", "Sp.Nr.", "Index", "Spez. Antigen"}
+    # CORRECTED naming
+    ignored = {"Sp.Nr.", "LISS", "Tz.Nr.", "Spez. Antigen"}
     return [col for col in df.columns if col not in ignored]
 
 
@@ -334,6 +335,10 @@ def create_medical_report(
 ) -> html.Div:
     """Return a Dash subtree summarising the medical findings."""
 
+    # Remove Index column if it exists
+    if "Index" in df.columns:
+        df = df.drop(columns=["Index"])
+
     # Sort user selections and separate 3x and 2x confirmed antigens
     sorted_selections = sort_antigens(user_selections)
     
@@ -367,25 +372,44 @@ def create_medical_report(
         liss_val = row.get("LISS", "-")
         if liss_val not in positive_liss_values:
             continue
-        record = {"Spender": row.get("Spender", ""), "LISS": liss_val}
-        # Add Sp.Nr. if available
-        if "Sp.Nr." in row:
-            record["Sp.Nr."] = row["Sp.Nr."]
+        # CORRECTED naming: use Tz.Nr. and Sp.Nr.
+        record = {"Sp.Nr.": row.get("Sp.Nr.", ""), "LISS": liss_val}
+        # Add Tz.Nr. if available
+        if "Tz.Nr." in row:
+            record["Tz.Nr."] = row["Tz.Nr."]
         # Add antigens in sorted order with formatting
         for ag in sorted_selections:
             if ag in row:
                 record[format_antigen(ag)] = row[ag]
         reaction_rows.append(record)
 
-    # Dash DataTable definition
-    columns_list = ["Sp.Nr.", "Spender", "LISS"] if "Sp.Nr." in df.columns else ["Spender", "LISS"]
+    # Dash DataTable definition - FIXED: compact layout for single page fit
+    columns_list = ["Tz.Nr.", "Sp.Nr.", "LISS"] if "Tz.Nr." in df.columns else ["Sp.Nr.", "LISS"]
     columns_list.extend([format_antigen(ag) for ag in sorted_selections])
     
     columns = [
-        {"name": col, "id": col if col in ["Sp.Nr.", "Spender", "LISS"] else col} 
+        {"name": col, "id": col if col in ["Tz.Nr.", "Sp.Nr.", "LISS"] else col} 
         for col in columns_list
     ]
 
+    # Build style_cell_conditional properly
+    style_cell_conditional = [
+        {"if": {"column_id": "Tz.Nr."}, "width": "50px"},
+        {"if": {"column_id": "Sp.Nr."}, "width": "100px"},
+        {"if": {"column_id": "LISS"}, "width": "60px"},
+    ]
+    
+    # Add antigen column styles
+    for ag in sorted_selections:
+        formatted_ag = format_antigen(ag)
+        style_cell_conditional.append({
+            "if": {"column_id": formatted_ag}, 
+            "width": "35px", 
+            "minWidth": "35px", 
+            "maxWidth": "35px"
+        })
+
+    # FIXED: Compact table style for single page fit
     return html.Div(
         [
             html.Div([
@@ -396,9 +420,25 @@ def create_medical_report(
             dash_table.DataTable(
                 columns=columns,
                 data=reaction_rows,
-                style_table={"overflowX": "auto"},
-                style_cell={"textAlign": "center"},
-                style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
+                style_table={
+                    "overflowX": "auto",
+                    "maxHeight": "400px",  # Fixed height to fit on screen
+                    "height": "400px"
+                },
+                style_cell={
+                    "textAlign": "center",
+                    "padding": "4px",  # Compact padding
+                    "fontSize": "11px",  # Smaller font
+                    "height": "25px"  # Compact row height
+                },
+                style_header={
+                    "backgroundColor": "#e3f2fd",  # Light blue background
+                    "fontWeight": "bold",
+                    "fontSize": "11px",
+                    "height": "30px"
+                },
+                style_cell_conditional=style_cell_conditional,
+                page_size=12,  # Fit more rows on screen
             ),
         ]
     )
@@ -415,6 +455,10 @@ def create_lab_technical_report(
 
     if antigen_columns is None:
         antigen_columns = _guess_antigen_columns(df)
+
+    # Remove Index column if it exists
+    if "Index" in df.columns:
+        df = df.drop(columns=["Index"])
 
     # Sort antigens for consistent display
     sorted_antigen_columns = sort_antigens(antigen_columns)
@@ -457,13 +501,13 @@ def create_lab_technical_report(
         for ag in differences
     ]
 
-    # Create original reaction table as requested with sorted columns
+    # Create original reaction table as requested with sorted columns - FIXED: compact layout
     original_table_data = []
     for _, row in df.iterrows():
         record = {}
-        if "Sp.Nr." in df.columns:
-            record["Sp.Nr."] = row["Sp.Nr."]
-        record["Spender"] = row.get("Spender", "")
+        if "Tz.Nr." in df.columns:
+            record["Tz.Nr."] = row["Tz.Nr."]
+        record["Sp.Nr."] = row.get("Sp.Nr.", "")
         record["LISS"] = row.get("LISS", "")
         # Add antigens in sorted order with formatting
         for ag in sorted_antigen_columns:
@@ -472,12 +516,29 @@ def create_lab_technical_report(
         original_table_data.append(record)
 
     original_columns_list = []
-    if "Sp.Nr." in df.columns:
-        original_columns_list.append("Sp.Nr.")
-    original_columns_list.extend(["Spender", "LISS"])
+    if "Tz.Nr." in df.columns:
+        original_columns_list.append("Tz.Nr.")
+    original_columns_list.extend(["Sp.Nr.", "LISS"])
     original_columns_list.extend([format_antigen(ag) for ag in sorted_antigen_columns])
     
     original_columns = [{"name": col, "id": col} for col in original_columns_list]
+
+    # Build style_cell_conditional properly for original table
+    original_style_cell_conditional = [
+        {"if": {"column_id": "Tz.Nr."}, "width": "45px"},
+        {"if": {"column_id": "Sp.Nr."}, "width": "90px"},
+        {"if": {"column_id": "LISS"}, "width": "50px"},
+    ]
+    
+    # Add antigen column styles
+    for ag in sorted_antigen_columns:
+        formatted_ag = format_antigen(ag)
+        original_style_cell_conditional.append({
+            "if": {"column_id": formatted_ag}, 
+            "width": "30px", 
+            "minWidth": "30px", 
+            "maxWidth": "30px"
+        })
 
     return html.Div(
         [
@@ -501,18 +562,34 @@ def create_lab_technical_report(
                     )
                 ],
                 data=summary_data,
-                style_table={"overflowX": "auto"},
-                style_cell={"textAlign": "center"},
-                style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
+                style_table={"overflowX": "auto", "maxHeight": "250px"},
+                style_cell={"textAlign": "center", "fontSize": "11px", "padding": "4px"},
+                style_header={"backgroundColor": "#e3f2fd", "fontWeight": "bold"},
                 style_data_conditional=highlight_styles,
+                page_size=8,
             ),
-            html.H5("Original Reaktionstabelle:", style={"marginTop": "30px"}),
+            html.H5("Original Reaktionstabelle:", style={"marginTop": "20px"}),
             dash_table.DataTable(
                 columns=original_columns,
                 data=original_table_data,
-                style_table={"overflowX": "auto"},
-                style_cell={"textAlign": "center"},
-                style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
+                style_table={
+                    "overflowX": "auto",
+                    "maxHeight": "300px",  # Fixed height
+                    "height": "300px"
+                },
+                style_cell={
+                    "textAlign": "center",
+                    "fontSize": "10px",  # Smaller font for compact view
+                    "padding": "3px",
+                    "height": "22px"  # Compact rows
+                },
+                style_header={
+                    "backgroundColor": "#e3f2fd",  # Light blue background
+                    "fontWeight": "bold",
+                    "fontSize": "10px",
+                    "height": "25px"
+                },
+                style_cell_conditional=original_style_cell_conditional,
                 page_size=10
             ),
         ]

@@ -40,14 +40,22 @@ Hoch und tiefstellen: lea: lea muss hochgestellt werden auch die anderen müssen
 einzelner code für jede analyse:
 
 
+############################################
+typed by hand the table from pdf to a usable csv from column Xga to D
+history of the project: firstly implemnted rule 1 only in python.
+Then implemented rules 2a/2b and 3
+Then tested it only in python VS code studio
+
+Dashboard developement.
+Because of its many usable elements and i decided for dash evebthough it is a bit more complicated
+i needed the extra features and CSS formatting.
+
+Then i began with the dashboard.
+Firstly the step was to interactivly insert the LISS values so the programm calculates it.
 
 
 
 
-schauen ob noch papyisiertes
-
-
-bachelorarbeit schreiben
 
 bugs and probelms for version 2.0
 ######################################################
@@ -315,6 +323,70 @@ Ensure analyses.lot_number is stored, used, and non-null post-Step 0.
 
 version 4.1
 ================================================================
+
+You are a senior Dash/Python developer.
+Please implement the following precise fixes and UI/UX refinements based on the latest user review.
+This list is additive and independent from earlier prompts. Do not repeat old tasks.
+
+🧭 GENERAL RENAMING & COLUMN STRUCTURE
+Correct naming in all steps:
+
+What is currently labeled Sp.Nr. is actually the Tabellenzeilen-Nummer (Tz. Nr.)
+
+What is currently labeled Spender (the long number) should be renamed to Sp.Nr.
+
+Apply this correction to all steps, all tables, all reports, all dropdowns.
+
+🧱 STEP 1: Table Structure Fix
+Add a new column immediately to the right of LISS, which is a copy of Sp.Nr.
+(This will improve visual tracking of rows without moving eyes far left).
+
+Ensure Sp.Nr. and this additional column are both named correctly (per above).
+
+Remove Index column from Step 1 completely.
+
+📋 STEP 2: UI and Logic Corrections
+Remove Index column (duplicated with Tz. Nr. → now renamed).
+
+Move the yellow info box labeled "Zusammenfassung der ausgeschlossenen Antigene" to the bottom of the page (not top).
+
+The “Antigene auswählen” checkbox row is misaligned with the table:
+
+Solution: Integrate the checkboxes into the table itself by adding a toggle row directly above the D–Xgᵃ columns.
+
+This ensures pixel-perfect alignment and intuitive control.
+
+The “Alle auswählen / abwählen / Standard-Auswahl” buttons are currently wired incorrectly:
+
+They do not toggle the checkbox row (just system state below).
+
+Fix the logic so these buttons directly control the header checkboxes.
+
+📊 STEP 3: Table Cleanup & Formatting
+Remove the redundant Index column (still present).
+
+In all textual lists:
+
+Apply proper formatting to “Ausgeschlossene Antigene”
+
+Use format_antigen() consistently to superscript letters (e.g. Leᵃ, Jsᵇ, P₁)
+
+Ensure antigen order is correct (D to Xgᵃ).
+
+📝 STEP 4: Reaction Table Layout
+The reaction table (D to Xgᵃ) currently requires scrolling vertically.
+
+Fix this so the entire table fits on a single page without scrolling down.
+
+Ideal layout = single screen height & width, no scroll bars.
+
+Columns D to Xgᵃ must:
+
+Have uniform width for all antigens
+
+Be compact but readable
+
+Column headers should have a light-blue background to match the theme.
 
 
 
