@@ -226,6 +226,99 @@ mainly buggs addressing
 
 
 
+You are a senior Python / Dash developer.
+The project is a 4-step “Antigen-Analyse Dashboard” (~2 000 LoC) that needs to be extended, debugged, and polished into Version 3.0.
+All code must remain modular, readable, and PEP-8 compliant.
+
+✅ Goals Summary
+Fix all outstanding bugs from v2.0.
+
+Add new requested features (UI, logic, and database-related).
+
+Clean up report wording and formatting.
+
+Add missing terminology refinements and UI improvements.
+
+🐞 General Bugs & Naming Fixes
+In main.py, Section 4 currently calls with 4 args – fix to 5 args.
+
+Rename spender → spendernummer (or a short version like Sp.Nr. where appropriate).
+
+Rename sp.nr → Tz Nr where applicable.
+
+🧪 Steps 1–4: Requested Adjustments
+Step 1 – LISS-Werte Auswahl
+Superscript antigen symbols in table header (Lea → Leᵃ, etc.)
+
+Column spendernummer → rename to Sp.Nr..
+
+Ensure first table column is Idx, second Sp.Nr..
+
+Step 2 – Analyse Prüfen
+Avoid repeating “provisorischer Vorbefund” text for 2× and 3× + results → make this distinct and readable.
+
+Place “Zusammenfassung der ausgeschlossenen Antigene” under the legend, not above or below the full layout.
+
+Mark all excluded antigens with reason: “Ausgeschlossen wegen Spalte ‹XYZ›”.
+
+Fix row alignment for antigen checkboxes (CSS grid mirroring table).
+
+Step 3 – Finalisierte Tabelle
+Remove test cells with negative reactions (i.e. only keep rows with at least one “+” or “±”).
+
+Ensure “Sp.Nr.” column is not selectable in antigen list.
+
+Step 4 – Reporting
+Match report wording to rulebook terminology:
+
+“3+ Antikörper vorhanden” and “2+ Antikörper vorhanden” should appear distinctly.
+
+Include Lot-Nr. in report header and PDF export.
+
+For lab report, add original reaction table as-is.
+
+Add “Go to Step 2” link in each report tab.
+
+📐 UI/UX Features
+Implement clickable step navigation (0–4) with validation tooltips (disable steps if requirements not met).
+
+Use only CSS via assets/styles.css, no inline styles.
+
+Clean labels:
+
+“Automatische Auswertung / Manuelle Auswertung”
+
+“PDF vergleichen & bestätigen”
+
+“Öffnen aus DB”
+
+🗃️ PDF & File Handling
+PDF/JPEG Upload (step 0): accept only application/pdf, image/jpeg.
+
+Table detection must use column headers only (ignore cell content).
+
+If parser confidence < 0.95 → editable preview for fixing “+” / “0”.
+
+🧠 Format Functions
+Implement format_antigen() for superscripts (Lea, JsB, etc.).
+
+Use throughout steps 2–4 and all generated reports.
+
+🧪 Testing & DB Logic
+Add tests/test_db_basic.py: test insert & fetch of dummy donor + analysis.
+
+Add migration safety check (no data loss if create_all() already ran).
+
+Ensure analyses.lot_number is stored, used, and non-null post-Step 0.
+
+
+
+version 4.1
+================================================================
+
+
+
+
 
 
 
