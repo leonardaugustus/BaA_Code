@@ -24,9 +24,19 @@ _SUPERSCRIPT_MAP: dict[str, str] = {
     "a": "ᵃ", "b": "ᵇ", "c": "ᶜ", "d": "ᵈ", "e": "ᵉ", "f": "ᶠ", "g": "ᵍ",
     "h": "ʰ", "i": "ⁱ", "j": "ʲ", "k": "ᵏ", "l": "ˡ", "m": "ᵐ", "n": "ⁿ",
     "o": "ᵒ", "p": "ᵖ", "r": "ʳ", "s": "ˢ", "t": "ᵗ", "u": "ᵘ", "v": "ᵛ",
-    "w": "ʷ", "x": "ˣ", "y": "ʸ", "z": "ᶻ"
+    "w": "ʷ", "x": "ˣ", "y": "ʸ", "z": "ᶻ", "A": "ᴬ", "B": "ᴮ", "C": "ᶜ", 
+    "D": "ᴰ", "E": "ᴱ", "F": "ᶠ", "G": "ᴳ", "H": "ᴴ", "I": "ᴵ", "J": "ᴶ", 
+    "K": "ᴷ", "L": "ᴸ", "M": "ᴹ", "N": "ᴺ", "O": "ᴼ", "P": "ᴾ", "R": "ᴿ", 
+    "S": "ˢ", "T": "ᵀ", "U": "ᵁ", "V": "ⱽ", "W": "ᵂ", "X": "ˣ", "Y": "ʸ", "Z": "ᶻ",
+    "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅"  # subscript numbers
 }
 
+# Fixed antigen order for consistent sorting
+ANTIGEN_ORDER = [
+    "D", "C", "E", "c", "e", "Cw", "K", "k", "Kpa", "Kpb", "Jsa", "Jsb", 
+    "Fya", "Fyb", "Jka", "Jkb", "Lea", "Leb", "P1", "M", "N", "S", "s", 
+    "Lua", "Lub", "Xga"
+]
 
 _POSITIVE_LISS_VALUES: set[str] = {"+/-", "1+", "2+", "3+", "4+"}
 
@@ -35,9 +45,34 @@ _POSITIVE_LISS_VALUES: set[str] = {"+/-", "1+", "2+", "3+", "4+"}
 ###############################################################################
 
 def format_antigen(antigen: str) -> str:  # noqa: D401 – simple function
-    """Return an antigen name with the last letter rendered as superscript."""
-    return antigen if len(antigen) <= 1 else antigen[:-1] + _SUPERSCRIPT_MAP.get(antigen[-1], antigen[-1])
+    """Return an antigen name with proper superscript/subscript formatting."""
+    if len(antigen) <= 1:
+        return antigen
+    
+    # Special case for P1 - should be P₁ (subscript 1)
+    if antigen == "P1":
+        return "P₁"
+    
+    # For other antigens, last character becomes superscript
+    prefix = antigen[:-1]
+    last_char = antigen[-1]
+    formatted_char = _SUPERSCRIPT_MAP.get(last_char, last_char)
+    return f"{prefix}{formatted_char}"
 
+def sort_antigens(antigen_list):
+    """Sort antigens according to the predefined order."""
+    if not antigen_list:
+        return []
+    
+    # Create a mapping from antigen name to its order index
+    order_map = {ag: i for i, ag in enumerate(ANTIGEN_ORDER)}
+    
+    # Sort the list based on the predefined order
+    # Antigens not in ANTIGEN_ORDER will appear at the end
+    def sort_key(antigen):
+        return order_map.get(antigen, len(ANTIGEN_ORDER))
+    
+    return sorted(antigen_list, key=sort_key)
 
 def get_header_with_navigation(
     current_step: int = 0,
@@ -299,23 +334,27 @@ def create_medical_report(
 ) -> html.Div:
     """Return a Dash subtree summarising the medical findings."""
 
-    # Separate 3x and 2x confirmed antigens as requested
+    # Sort user selections and separate 3x and 2x confirmed antigens
+    sorted_selections = sort_antigens(user_selections)
+    
     confirmed_3x = [
-        ag for ag in user_selections if "Bestätigt (3x +)" in status_map.get(ag, "")
+        ag for ag in sorted_selections if "Bestätigt (3x +)" in status_map.get(ag, "")
     ]
     confirmed_2x = [
-        ag for ag in user_selections if "Bestätigt (2x +)" in status_map.get(ag, "")
+        ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")
     ]
 
-    # Create distinct text for 3x and 2x as requested
+    # Create properly formatted antibody text with superscripts
     antibody_text_parts = []
     if confirmed_3x:
+        formatted_3x = [f"Anti-{format_antigen(ag)}" for ag in confirmed_3x]
         antibody_text_parts.append(
-            f"3+ Antikörper vorhanden: " + ", ".join(f"Anti-{ag}" for ag in confirmed_3x)
+            f"3+ Antikörper vorhanden: {', '.join(formatted_3x)}"
         )
     if confirmed_2x:
+        formatted_2x = [f"Anti-{format_antigen(ag)}" for ag in confirmed_2x]
         antibody_text_parts.append(
-            f"2+ Antikörper vorhanden: " + ", ".join(f"Anti-{ag}" for ag in confirmed_2x)
+            f"2+ Antikörper vorhanden: {', '.join(formatted_2x)}"
         )
     
     if not antibody_text_parts:
@@ -332,14 +371,15 @@ def create_medical_report(
         # Add Sp.Nr. if available
         if "Sp.Nr." in row:
             record["Sp.Nr."] = row["Sp.Nr."]
-        for ag in user_selections:
+        # Add antigens in sorted order with formatting
+        for ag in sorted_selections:
             if ag in row:
                 record[format_antigen(ag)] = row[ag]
         reaction_rows.append(record)
 
     # Dash DataTable definition
     columns_list = ["Sp.Nr.", "Spender", "LISS"] if "Sp.Nr." in df.columns else ["Spender", "LISS"]
-    columns_list.extend([format_antigen(ag) for ag in user_selections])
+    columns_list.extend([format_antigen(ag) for ag in sorted_selections])
     
     columns = [
         {"name": col, "id": col if col in ["Sp.Nr.", "Spender", "LISS"] else col} 
@@ -376,10 +416,14 @@ def create_lab_technical_report(
     if antigen_columns is None:
         antigen_columns = _guess_antigen_columns(df)
 
+    # Sort antigens for consistent display
+    sorted_antigen_columns = sort_antigens(antigen_columns)
+    sorted_user_selections = sort_antigens(user_selections)
+
     # Count + reactions per antigen (only for *reactive* LISS rows)
     reactive_mask = df["LISS"].isin(_POSITIVE_LISS_VALUES)
     reaction_counts: dict[str, dict[str, object]] = {}
-    for ag in antigen_columns:
+    for ag in sorted_antigen_columns:
         if ag not in df.columns:
             continue
         count = int((reactive_mask & (df[ag] == "+")).sum())
@@ -413,7 +457,7 @@ def create_lab_technical_report(
         for ag in differences
     ]
 
-    # Create original reaction table as requested
+    # Create original reaction table as requested with sorted columns
     original_table_data = []
     for _, row in df.iterrows():
         record = {}
@@ -421,7 +465,8 @@ def create_lab_technical_report(
             record["Sp.Nr."] = row["Sp.Nr."]
         record["Spender"] = row.get("Spender", "")
         record["LISS"] = row.get("LISS", "")
-        for ag in antigen_columns:
+        # Add antigens in sorted order with formatting
+        for ag in sorted_antigen_columns:
             if ag in row:
                 record[format_antigen(ag)] = row[ag]
         original_table_data.append(record)
@@ -430,7 +475,7 @@ def create_lab_technical_report(
     if "Sp.Nr." in df.columns:
         original_columns_list.append("Sp.Nr.")
     original_columns_list.extend(["Spender", "LISS"])
-    original_columns_list.extend([format_antigen(ag) for ag in antigen_columns])
+    original_columns_list.extend([format_antigen(ag) for ag in sorted_antigen_columns])
     
     original_columns = [{"name": col, "id": col} for col in original_columns_list]
 
@@ -527,18 +572,22 @@ def generate_pdf_report(
     )
     story.extend([tbl, Spacer(1, 20)])
 
-    # Medical section with distinct 3x and 2x findings
+    # Medical section with distinct 3x and 2x findings, sorted
     story.append(Paragraph("Medizinischer Bericht", styles["Heading2"]))
 
-    confirmed_3x = [ag for ag in user_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
-    confirmed_2x = [ag for ag in user_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
+    sorted_selections = sort_antigens(user_selections)
+    confirmed_3x = [ag for ag in sorted_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
+    confirmed_2x = [ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
 
     if confirmed_3x:
-        antibody_3x_text = "3+ Antikörper vorhanden: " + ", ".join(f"Anti-{ag}" for ag in confirmed_3x)
+        # Format antigens for PDF (can't use Unicode superscripts reliably in PDF)
+        formatted_3x = [f"Anti-{ag}" for ag in confirmed_3x]
+        antibody_3x_text = "3+ Antikörper vorhanden: " + ", ".join(formatted_3x)
         story.append(Paragraph(antibody_3x_text, styles["Normal"]))
     
     if confirmed_2x:
-        antibody_2x_text = "2+ Antikörper vorhanden: " + ", ".join(f"Anti-{ag}" for ag in confirmed_2x)
+        formatted_2x = [f"Anti-{ag}" for ag in confirmed_2x]
+        antibody_2x_text = "2+ Antikörper vorhanden: " + ", ".join(formatted_2x)
         story.append(Paragraph(antibody_2x_text, styles["Normal"]))
 
     if not confirmed_3x and not confirmed_2x:
@@ -567,8 +616,11 @@ def create_exclusion_summary(
             style={"color": "green", "fontWeight": "bold"},
         )
 
+    # Sort excluded antigens for consistent display
+    sorted_excluded = sort_antigens(list(system_excluded))
+    
     items: list[html.Div] = []
-    for ag in sorted(system_excluded):
+    for ag in sorted_excluded:
         reason = exclusion_reasons.get(ag, "Unbekannter Grund")
         items.append(
             html.Div(
@@ -589,21 +641,26 @@ def create_provisional_report(
 ) -> html.Div:
     """Return the provisional findings widget for Step 2."""
 
-    confirmed_3x = [ag for ag in user_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
-    confirmed_2x = [ag for ag in user_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
+    # Sort selections for consistent display
+    sorted_selections = sort_antigens(user_selections)
+    
+    confirmed_3x = [ag for ag in sorted_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
+    confirmed_2x = [ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
 
-    # Create distinct reports for 2x and 3x as requested
+    # Create distinct reports for 2x and 3x as requested with proper formatting
     report_sections = []
     
     if confirmed_3x:
+        formatted_3x = [format_antigen(ag) for ag in confirmed_3x]
         report_sections.append(
-            html.P(f"3+ Antikörper vorhanden: {', '.join(confirmed_3x)}", 
+            html.P(f"3+ Antikörper vorhanden: {', '.join(formatted_3x)}", 
                   style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#2d6a4f"})
         )
     
     if confirmed_2x:
+        formatted_2x = [format_antigen(ag) for ag in confirmed_2x]
         report_sections.append(
-            html.P(f"2+ Antikörper vorhanden: {', '.join(confirmed_2x)}", 
+            html.P(f"2+ Antikörper vorhanden: {', '.join(formatted_2x)}", 
                   style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#52b788"})
         )
     

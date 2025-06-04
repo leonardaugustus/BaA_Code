@@ -6,11 +6,9 @@ section 4, 5 instead of 4 args in main.py
 
 
 
+Reihenfolge:
 
-
-
-
-
+D,C,E,c,e,CW,K,k,Kpa,Kpb,Jsa,Jsb,Fya,Fyb,Jka,Jkb,Lea,Leb,P1,M,N,S,s,Lua,Lub,Xga
 
 
 

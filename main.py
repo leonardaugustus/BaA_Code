@@ -10,7 +10,7 @@ import json
 
 # Import from your modules
 from database import get_db, Analysis, Donor
-from step0_components import get_step0_layout, parse_pdf_content, build_diff_table
+from step0_components import get_step0_layout, parse_pdf_content, build_diff_table, build_editable_diff_table, parse_file_content
 from navigation_and_step4 import (
     get_header_with_navigation, get_step4_layout, 
     create_exclusion_summary, create_provisional_report,
@@ -22,18 +22,49 @@ superscript_map = {
     "a": "ᵃ", "b": "ᵇ", "c": "ᶜ", "d": "ᵈ", "e": "ᵉ", "f": "ᶠ", "g": "ᵍ",
     "h": "ʰ", "i": "ⁱ", "j": "ʲ", "k": "ᵏ", "l": "ˡ", "m": "ᵐ", "n": "ⁿ",
     "o": "ᵒ", "p": "ᵖ", "r": "ʳ", "s": "ˢ", "t": "ᵗ", "u": "ᵘ", "v": "ᵛ",
-    "w": "ʷ", "x": "ˣ", "y": "ʸ", "z": "ᶻ",
-    "1": "¹"
+    "w": "ʷ", "x": "ˣ", "y": "ʸ", "z": "ᶻ", "A": "ᴬ", "B": "ᴮ", "C": "ᶜ", 
+    "D": "ᴰ", "E": "ᴱ", "F": "ᶠ", "G": "ᴳ", "H": "ᴴ", "I": "ᴵ", "J": "ᴶ", 
+    "K": "ᴷ", "L": "ᴸ", "M": "ᴹ", "N": "ᴺ", "O": "ᴼ", "P": "ᴾ", "R": "ᴿ", 
+    "S": "ˢ", "T": "ᵀ", "U": "ᵁ", "V": "ⱽ", "W": "ᵂ", "X": "ˣ", "Y": "ʸ", "Z": "ᶻ",
+    "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅"  # subscript numbers
 }
 
+# Fixed antigen order for consistent sorting
+ANTIGEN_ORDER = [
+    "D", "C", "E", "c", "e", "Cw", "K", "k", "Kpa", "Kpb", "Jsa", "Jsb", 
+    "Fya", "Fyb", "Jka", "Jkb", "Lea", "Leb", "P1", "M", "N", "S", "s", 
+    "Lua", "Lub", "Xga"
+]
+
 def format_antigen(ag: str) -> str:
-    """Format antigen label so that the last character is in superscript."""
+    """Format antigen label with proper superscript/subscript formatting."""
     if len(ag) <= 1:
         return ag
+    
+    # Special case for P1 - should be P₁ (subscript 1)
+    if ag == "P1":
+        return "P₁"
+    
+    # For other antigens, last character becomes superscript
     prefix = ag[:-1]
     last_char = ag[-1]
-    superscript = superscript_map.get(last_char, last_char)
-    return f"{prefix}{superscript}"
+    formatted_char = superscript_map.get(last_char, last_char)
+    return f"{prefix}{formatted_char}"
+
+def sort_antigens(antigen_list):
+    """Sort antigens according to the predefined order."""
+    if not antigen_list:
+        return []
+    
+    # Create a mapping from antigen name to its order index
+    order_map = {ag: i for i, ag in enumerate(ANTIGEN_ORDER)}
+    
+    # Sort the list based on the predefined order
+    # Antigens not in ANTIGEN_ORDER will appear at the end
+    def sort_key(antigen):
+        return order_map.get(antigen, len(ANTIGEN_ORDER))
+    
+    return sorted(antigen_list, key=sort_key)
 
 # Initialize app
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
@@ -51,6 +82,8 @@ ANTIGEN_COLUMNS = [col for col in data.columns if col not in ["Sp.Nr.", "Spender
 # Update the navigation module with ANTIGEN_COLUMNS
 import navigation_and_step4
 navigation_and_step4.ANTIGEN_COLUMNS = ANTIGEN_COLUMNS
+navigation_and_step4.format_antigen = format_antigen
+navigation_and_step4.sort_antigens = sort_antigens
 
 # Color codes for analysis status
 STATUS_COLORS = {
@@ -111,10 +144,10 @@ def analyze_data(df, manual_mode=False):
         return status_map, exclusion_reasons, system_excluded
     
     # Automatic mode
-    exclusion_pairs = [("C", "c"), ("E", "e"), ("K", "k"), ("KpA", "KpB"),
-                      ("JsA", "JsB"), ("FyA", "FyB"), ("Jka", "Jkb"),
-                      ("Lea", "Leb"), ("M", "N"), ("S", "s"), ("LuA", "LuB")]
-    allowed_hetero = ["CW", "K", "KpA", "LuA"]
+    exclusion_pairs = [("C", "c"), ("E", "e"), ("K", "k"), ("Kpa", "Kpb"),
+                      ("Jsa", "Jsb"), ("Fya", "Fyb"), ("Jka", "Jkb"),
+                      ("Lea", "Leb"), ("M", "N"), ("S", "s"), ("Lua", "Lub")]
+    allowed_hetero = ["Cw", "K", "Kpa", "Lua"]
     
     def zygosity(val1, val2):
         if val1 == "+" and val2 == "+": return "hetero"
@@ -231,64 +264,84 @@ def build_liss_table(df):
     )
 
 def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
+    """Build analysis table with perfectly aligned checkboxes"""
     df = prepare_data(df)
     styles = []
     all_columns = list(df.columns)
 
-    header_checkboxes = html.Div(
-        id="checkbox-container",
-        style={
-            "display": "flex",
-            "flexDirection": "row",
-            "alignItems": "center",
-            "marginBottom": "10px",
-            "overflowX": "auto",
-            "whiteSpace": "nowrap",
-            "paddingLeft": "0"
-        },
-        children=[]
-    )
-
-    for ag in ANTIGEN_COLUMNS:
-        if ag in all_columns:
-            status = status_map.get(ag, "")
-            is_excluded = ag in system_excluded
-            background_color = STATUS_COLORS.get(status, "#ffffff")
-
+    # Calculate exact column widths for perfect alignment
+    fixed_columns = ["Index", "Sp.Nr.", "Spender", "LISS", "Spez. Antigen"]
+    fixed_widths = {"Index": 60, "Sp.Nr.": 80, "Spender": 120, "LISS": 80, "Spez. Antigen": 150}
+    antigen_width = 40
+    
+    # Build checkbox container with exact grid template
+    grid_columns = []
+    checkbox_children = []
+    
+    for col in all_columns:
+        if col in fixed_columns:
+            width = fixed_widths.get(col, 80)
+            grid_columns.append(f"{width}px")
+            
+            # Add spacer div for non-antigen columns
+            checkbox_children.append(
+                html.Div(style={"width": f"{width}px", "height": "40px"})
+            )
+        elif col in ANTIGEN_COLUMNS:
+            grid_columns.append(f"{antigen_width}px")
+            
+            status = status_map.get(col, "")
+            is_excluded = col in system_excluded
+            display_label = format_antigen(col)
+            
             styles.append({
-                "if": {"column_id": ag},
-                "backgroundColor": background_color,
+                "if": {"column_id": col},
+                "backgroundColor": STATUS_COLORS.get(status, "#ffffff"),
                 "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
             })
-
-            display_label = format_antigen(ag)
-
-            if ag in ["Sp.Nr."]:
-                header_checkboxes.children.append(
-                    html.Div([
-                        html.Div(ag, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
-                        html.Div(style={"height": "18px"})
-                    ], style={"width": "40px", "display": "inline-block", "textAlign": "center"})
-                )
-                continue
-
-            header_checkboxes.children.append(
+            
+            checkbox_children.append(
                 html.Div([
-                    html.Div(display_label, style={"fontSize": "11px", "textAlign": "center", "marginBottom": "2px"}),
+                    html.Div(display_label, style={
+                        "fontSize": "11px", 
+                        "textAlign": "center", 
+                        "marginBottom": "2px",
+                        "lineHeight": "1.2"
+                    }),
                     dcc.Checklist(
-                        id={"type": "column-select", "index": ag},
-                        options=[{"label": "", "value": ag}],
-                        value=[ag] if (ag not in system_excluded) else [],
+                        id={"type": "column-select", "index": col},
+                        options=[{"label": "", "value": col}],
+                        value=[col] if (col not in system_excluded) else [],
                         className="column-checkbox",
                         style={"pointerEvents": "auto"}
                     )
                 ], style={
-                    "width": "40px",
-                    "display": "inline-block",
+                    "width": f"{antigen_width}px",
                     "textAlign": "center",
-                    "opacity": "0.5" if is_excluded else "1"
+                    "opacity": "0.5" if is_excluded else "1",
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "height": "40px"
                 })
             )
+
+    header_checkboxes = html.Div(
+        checkbox_children,
+        id="checkbox-container",
+        style={
+            "display": "grid",
+            "gridTemplateColumns": " ".join(grid_columns),
+            "gap": "0px",
+            "alignItems": "center",
+            "marginBottom": "10px",
+            "padding": "8px 0",
+            "backgroundColor": "#f8f9fa",
+            "borderRadius": "4px",
+            "boxShadow": "0 1px 3px rgba(0,0,0,0.1)"
+        }
+    )
 
     antigen_selector = html.Div([
         dcc.Checklist(
@@ -306,10 +359,10 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
 
     style_cell_conditional = [
         {"if": {"column_id": "Sp.Nr."}, "width": "80px", "textAlign": "center"},
-        {"if": {"column_id": "Index"}, "width": "40px", "textAlign": "center"},
-        {"if": {"column_id": "LISS"}, "width": "50px", "textAlign": "center"},
-        {"if": {"column_id": "Spender"}, "width": "80px", "textAlign": "left"},
-        {"if": {"column_id": "Spez. Antigen"}, "width": "100px", "textAlign": "left"},
+        {"if": {"column_id": "Index"}, "width": "60px", "textAlign": "center"},
+        {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
+        {"if": {"column_id": "Spender"}, "width": "120px", "textAlign": "left"},
+        {"if": {"column_id": "Spez. Antigen"}, "width": "150px", "textAlign": "left"},
     ] + [{
         "if": {"column_id": col},
         "minWidth": "40px", "width": "40px", "maxWidth": "40px", "textAlign": "center"
@@ -557,9 +610,9 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
         differences = list(user_included.symmetric_difference(system_included))
     
     try:
-        included_str = ", ".join(sorted(included_columns)) if included_columns else "Keine"
-        user_str = ", ".join(sorted(user_selections)) if user_selections else "Keine"
-        diff_str = ", ".join(sorted(differences)) if differences else "Keine"
+        included_str = ", ".join(sort_antigens(included_columns)) if included_columns else "Keine"
+        user_str = ", ".join(sort_antigens(user_selections)) if user_selections else "Keine"
+        diff_str = ", ".join(sort_antigens(differences)) if differences else "Keine"
     except Exception:
         included_str = "Keine"
         user_str = "Keine"
@@ -609,7 +662,7 @@ def get_step3_layout(df, included_columns, excluded_columns, user_selections=Non
         
         html.Div([
             html.H4("Ausgeschlossene Antigene:", className="section-title"),
-            html.Div(", ".join(sorted(excluded_columns)) if excluded_columns else "Keine", 
+            html.Div(", ".join(sort_antigens(excluded_columns)) if excluded_columns else "Keine", 
                     className="excluded-antigens-list")
         ], className="excluded-antigens-section"),
         
@@ -724,7 +777,9 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
     [Output('main-content', 'children', allow_duplicate=True),
      Output('header-container', 'children', allow_duplicate=True),
      Output('current-step', 'data', allow_duplicate=True)],
-    [Input('quick-jump-step2', 'n_clicks')],
+    [Input('quick-jump-step2', 'n_clicks'),
+     Input('quick-jump-step2-med', 'n_clicks'),
+     Input('quick-jump-step2-lab', 'n_clicks')],
     [State('analyzed-data', 'data'),
      State('status-map', 'data'),
      State('exclusion-reasons', 'data'),
@@ -733,9 +788,9 @@ def handle_step_navigation(n_clicks_list, current_step, step_states, analyzed_da
      State('step-states', 'data')],
     prevent_initial_call=True
 )
-def quick_jump_to_step2(n_clicks, analyzed_data, status_map, exclusion_reasons, 
+def quick_jump_to_step2(n_clicks1, n_clicks2, n_clicks3, analyzed_data, status_map, exclusion_reasons, 
                         system_excluded, eval_mode, step_states):
-    if not n_clicks:
+    if not any([n_clicks1, n_clicks2, n_clicks3]):
         raise dash.exceptions.PreventUpdate
     
     df = pd.DataFrame(analyzed_data)
@@ -978,7 +1033,7 @@ def go_back_to_step1(n_clicks, analyzed_data, current_step, step_states):
     df = pd.DataFrame(analyzed_data)
     return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
 
-# Update selected antigens display
+# Update selected antigens display with sorted order
 @app.callback(
     Output('selected-antigens-display', 'children'),
     [Input('user-selections', 'data')]
@@ -989,7 +1044,9 @@ def update_selected_antigens_display(selected_antigens):
     
     try:
         if isinstance(selected_antigens, list):
-            return ", ".join(sorted(selected_antigens))
+            sorted_antigens = sort_antigens(selected_antigens)
+            formatted_antigens = [format_antigen(ag) for ag in sorted_antigens]
+            return ", ".join(formatted_antigens)
         else:
             return "Keine Antigene ausgewählt"
     except Exception:

@@ -1,4 +1,4 @@
-/* assets/style.css - Version 3.0 */
+/* assets/style.css - Version 3.0 with Perfect Alignment */
 :root {
     --primary-color: #2e8bc0;
     --secondary-color: #145da0;
@@ -431,18 +431,19 @@ body {
     accent-color: var(--primary-color);
 }
 
-/* Checkbox container - aligned with table columns */
+/* Perfect Checkbox Container Alignment - CRITICAL for Step 2 */
 #checkbox-container {
     background-color: #f8f9fa;
-    padding: 8px 0px;
+    padding: 8px 0;
     border-radius: 4px;
     margin-bottom: 10px;
-    margin-left: 0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    /* Grid layout is set dynamically in JavaScript for perfect alignment */
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
-    gap: 2px;
     align-items: center;
+    gap: 0;
+    overflow-x: auto;
+    white-space: nowrap;
 }
 
 #checkbox-container > div {
@@ -450,7 +451,33 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 40px;
+    height: 40px;
+    font-size: 11px;
+    line-height: 1.2;
+}
+
+/* Ensure checkbox containers maintain perfect alignment */
+#checkbox-container .column-checkbox {
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#checkbox-container .column-checkbox input[type="checkbox"] {
+    margin: 0;
+    padding: 0;
+}
+
+/* Antigen label formatting in checkboxes */
+#checkbox-container > div > div:first-child {
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.2;
+    margin-bottom: 2px;
+    word-break: break-word;
+    overflow-wrap: break-word;
 }
 
 /* Tooltip styling */
@@ -623,7 +650,7 @@ body {
     }
     
     #checkbox-container {
-        grid-template-columns: repeat(auto-fit, minmax(35px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(35px, 1fr)) !important;
     }
 }
 
@@ -644,6 +671,10 @@ body {
     .step-number {
         width: 35px;
         height: 35px;
+    }
+    
+    #checkbox-container {
+        grid-template-columns: repeat(auto-fit, minmax(30px, 1fr)) !important;
     }
 }
 
