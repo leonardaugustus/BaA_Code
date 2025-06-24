@@ -432,9 +432,21 @@ ValueError: cannot insert Tz.Nr. (Kopie), already exists
 
 
 
+Generell überall im GUI auf fachliche korrektheit und uniform schauen zb überall ausgestrichen mit ausgeschlossen ersetzte (da ausgeschlossen fachtecnisch korrekter ist)
+und auch dass überall der gliche begriff verwendet wird zb nicht igendwo ausgeschlossen und ausgestrichen für das gleiche
+
+Schritt 2: Antikörper 3x bestätigit anstatt vorhanden
+
+schritt4 labortechnischem bericht: bei labortechnischem bericht dies ebenfalls einfügen:
+"3+ Antikörper vorhanden: Anti-D, Anti-Jkᵇ, Anti-M
+2+ Antikörper vorhanden: Anti-E, Anti-Kpᵃ, Anti-Leᵃ, Anti-Luᵃ"
+
+Anzahl getesteter Spender: 11 -> wegnehmen bei schritt 'bericht' im labortechnischem bericht.
 
 
 
+Tz. Nr. mit ' ' ersetzten also wenn möglich mit empty string für jede einzelne tabelle wo es vorkommt
+Tz. Nr. (kopie) auch ersetten aber das es ja nicht gleich ein darf möglicherweise mit '  ' dppeltem leerschlag ersetzten -> ebenfalls überall im code wo es vorkommt
+bei allen spaltentiteln 
 
-
-
+Bei jeder Tabelle wird nicht der gesamte spaltentitel hellblau markirt bitte behebe dies ebenfalls sodass bei jeder tabelle der gesamte spalten titel markiert wirds

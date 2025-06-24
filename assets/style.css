@@ -1,4 +1,4 @@
-/* assets/style.css - Version 3.1 with Enhanced Table Styling */
+/* assets/style.css - Version 3.2+ with Bug Fixes and UI Improvements */
 :root {
     --primary-color: #2e8bc0;
     --secondary-color: #145da0;
@@ -387,7 +387,7 @@ body {
     color: var(--danger-color);
 }
 
-/* ENHANCED: DataTable customizations for Step 2 checkbox integration */
+/* ENHANCED: DataTable customizations with FIXED light blue headers */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td, 
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
     border: 1px solid var(--border-color);
@@ -412,17 +412,55 @@ body {
     background-color: #e9ecef !important;
 }
 
-/* ENHANCED: Style for antigen column headers with light blue background */
-.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:nth-child(n+4) {
+/* FIXED: Enhanced antigen column headers with COMPLETE light blue background coverage */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:nth-child(n+4),
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header:nth-child(n+4) {
     background-color: var(--light-blue-bg) !important;
+    background: var(--light-blue-bg) !important;
     color: #1976d2 !important;
     font-weight: bold !important;
+}
+
+/* FIXED: Ensure entire header cell is covered, not just partially */
+.dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner .column-header-name {
+    background-color: inherit !important;
+    width: 100% !important;
+    height: 100% !important;
+    padding: 8px 4px !important;
+    box-sizing: border-box !important;
+}
+
+/* FIXED: Additional specificity for antigen headers in all steps */
+.dash-table-container th[data-column-id*="D"],
+.dash-table-container th[data-column-id*="C"],
+.dash-table-container th[data-column-id*="E"],
+.dash-table-container th[data-column-id*="K"],
+.dash-table-container th[data-column-id*="F"],
+.dash-table-container th[data-column-id*="J"],
+.dash-table-container th[data-column-id*="L"],
+.dash-table-container th[data-column-id*="P"],
+.dash-table-container th[data-column-id*="M"],
+.dash-table-container th[data-column-id*="N"],
+.dash-table-container th[data-column-id*="S"],
+.dash-table-container th[data-column-id*="X"] {
+    background-color: var(--light-blue-bg) !important;
+    background: var(--light-blue-bg) !important;
+    color: #1976d2 !important;
 }
 
 /* Style for non-antigen headers (Tz.Nr., Sp.Nr., LISS, etc.) */
 .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th:nth-child(-n+3) {
     background-color: var(--light-color) !important;
     color: var(--dark-color) !important;
+}
+
+/* FIXED: Column naming - special styling for space-named columns */
+.dash-table-container th[data-column-id=" "],
+.dash-table-container th[data-column-id="  "] {
+    background-color: var(--light-color) !important;
+    color: var(--dark-color) !important;
+    text-align: center !important;
+    font-size: 12px !important;
 }
 
 /* Superscript styling in tables */

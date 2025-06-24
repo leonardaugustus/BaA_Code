@@ -453,12 +453,12 @@ def create_medical_report(
 
 def create_lab_technical_report(
     df: pd.DataFrame,
-    status_map: Mapping[str, str],
-    exclusion_reasons: Mapping[str, str],
-    user_selections: Sequence[str],
-    antigen_columns: Sequence[str] | None = None,
+    status_map: dict,
+    exclusion_reasons: dict,
+    user_selections: list,
+    antigen_columns: list = None,
 ) -> html.Div:
-    """Return a Dash subtree with the lab-technical overview."""
+    """Return a Dash subtree with the lab-technical overview - FIXED: Added antibody summary, removed donor count"""
 
     if antigen_columns is None:
         antigen_columns = _guess_antigen_columns(df)
@@ -471,9 +471,34 @@ def create_lab_technical_report(
     sorted_antigen_columns = sort_antigens(antigen_columns)
     sorted_user_selections = sort_antigens(user_selections)
 
+    # FIXED: Add the same antibody summary as in medical report
+    confirmed_3x = [ag for ag in sorted_user_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
+    confirmed_2x = [ag for ag in sorted_user_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
+
+    # Create antibody summary text
+    antibody_summary_parts = []
+    if confirmed_3x:
+        formatted_3x = [f"Anti-{format_antigen(ag)}" for ag in confirmed_3x]
+        antibody_summary_parts.append(
+            html.P(f"3× Antikörper bestätigt: {', '.join(formatted_3x)}", 
+                  style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#2d6a4f"})
+        )
+    if confirmed_2x:
+        formatted_2x = [f"Anti-{format_antigen(ag)}" for ag in confirmed_2x]
+        antibody_summary_parts.append(
+            html.P(f"2× Antikörper bestätigt: {', '.join(formatted_2x)}", 
+                  style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#52b788"})
+        )
+    
+    if not antibody_summary_parts:
+        antibody_summary_parts = [
+            html.P("Keine Antikörper nachgewiesen", 
+                  style={"fontSize": "1.1em", "fontWeight": "bold", "color": "#666"})
+        ]
+
     # Count + reactions per antigen (only for *reactive* LISS rows)
     reactive_mask = df["LISS"].isin(_POSITIVE_LISS_VALUES)
-    reaction_counts: dict[str, dict[str, object]] = {}
+    reaction_counts = {}
     for ag in sorted_antigen_columns:
         if ag not in df.columns:
             continue
@@ -492,12 +517,12 @@ def create_lab_technical_report(
             "Reaktionen": info["count"],
             "Status": info["status"],
             "Benutzerauswahl": "Ja" if info["user_selected"] else "Nein",
-            "Ausschlussgrund": info["exclusion_reason"],
+            "Ausschlussgrund": info["exclusion_reason"],  # FIXED: terminology
         }
         for ag, info in reaction_counts.items()
     ]
 
-    system_selected = [ag for ag, status in status_map.items() if "Ausgestrichen" not in status]
+    system_selected = [ag for ag, status in status_map.items() if "Ausgeschlossen" not in status]  # FIXED: terminology
     differences = set(user_selections).symmetric_difference(system_selected)
 
     # DataTable conditional formatting for differences with proper formatting
@@ -514,7 +539,7 @@ def create_lab_technical_report(
     for _, row in df.iterrows():
         record = {}
         if "Tz.Nr." in df.columns:
-            record["Tz.Nr."] = row["Tz.Nr."]
+            record[" "] = row["Tz.Nr."]  # FIXED: Column name is now single space
         record["Sp.Nr."] = row.get("Sp.Nr.", "")
         record["LISS"] = row.get("LISS", "")
         # FIXED: Add antigens in sorted order with formatting
@@ -525,7 +550,7 @@ def create_lab_technical_report(
 
     original_columns_list = []
     if "Tz.Nr." in df.columns:
-        original_columns_list.append("Tz.Nr.")
+        original_columns_list.append(" ")  # FIXED: Single space for display
     original_columns_list.extend(["Sp.Nr.", "LISS"])
     original_columns_list.extend([format_antigen(ag) for ag in sorted_antigen_columns])
     
@@ -533,7 +558,7 @@ def create_lab_technical_report(
 
     # Build style_cell_conditional properly for original table
     original_style_cell_conditional = [
-        {"if": {"column_id": "Tz.Nr."}, "width": "45px"},
+        {"if": {"column_id": " "}, "width": "45px"},  # FIXED: Single space column
         {"if": {"column_id": "Sp.Nr."}, "width": "90px"},
         {"if": {"column_id": "LISS"}, "width": "50px"},
     ]
@@ -550,7 +575,13 @@ def create_lab_technical_report(
 
     return html.Div(
         [
-            html.P(f"Anzahl getesteter Spender: {len(df)}"),
+            # FIXED: Added antibody summary at the top
+            html.Div([
+                html.H5("Antikörper-Zusammenfassung:"),
+                html.Div(antibody_summary_parts)
+            ], style={"marginBottom": "20px", "padding": "15px", "backgroundColor": "#e3f2fd", "borderRadius": "5px"}),
+            
+            # REMOVED: "Anzahl getesteter Spender" line as requested
             html.P(f"System-Auswahl: {len(system_selected)} Antigene"),
             html.P(f"Benutzer-Auswahl: {len(user_selections)} Antigene"),
             html.P(
@@ -566,7 +597,7 @@ def create_lab_technical_report(
                         "Reaktionen",
                         "Status",
                         "Benutzerauswahl",
-                        "Ausschlussgrund",
+                        "Ausschlussgrund",  # FIXED: terminology
                     )
                 ],
                 data=summary_data,

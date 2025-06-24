@@ -94,7 +94,7 @@ STATUS_COLORS = {
     "Bestätigt (2x +)": "#b7e4c7",
     "Nicht ausgeschlossen": "#ffd166",
     "Keine Reaktion": "#e9ecef",
-    "Ausgestrichen": "#e63946"
+    "Ausgeschlossen": "#e63946"
 }
 
 # --- Utility functions ---
@@ -187,7 +187,7 @@ def analyze_data(df, manual_mode=False):
         positives = df[df["LISS"].isin(["+/-", "1+", "2+", "3+", "4+"])]
         
         if ag in system_excluded:
-            status_map[ag] = "Ausgestrichen"
+            status_map[ag] = "Ausgeschlossen"
             exclusion_reasons[ag] = f"Tz Nr: {', '.join(map(str, sorted(set(exclusion_tracking[ag]))))}"
         else:
             pos_count = sum(positives[ag].fillna('').astype(str) == "+")
@@ -214,14 +214,23 @@ def build_liss_table(df):
     # FIXED: Add row index column immediately after LISS (showing row numbers)
     if "LISS" in df.columns:
         liss_idx = df.columns.get_loc("LISS")
-        # Create row index column (1-based numbering for user display)
-        row_index = pd.Series(range(1, len(df) + 1), name="Tz.Nr. (Kopie)")
-        df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
+        
+        # CRITICAL FIX: Check if column already exists before inserting
+        if "Tz.Nr.  " not in df.columns:  # Note: double space for temporary copy
+            # Create row index column (1-based numbering for user display)
+            row_index = pd.Series(range(1, len(df) + 1), name="Tz.Nr.  ")
+            df.insert(liss_idx + 1, "Tz.Nr.  ", row_index)
     
     columns = []
     for col in df.columns:
         # Apply superscript formatting to antigen column names
         display_name = format_antigen(col) if col in ANTIGEN_COLUMNS else col
+        
+        # FIXED: Column naming - use single space for main column, double space for copy
+        if col == "Tz.Nr.":
+            display_name = " "  # Single space as requested
+        elif col == "Tz.Nr.  ":
+            display_name = "  "  # Double space for temporary copy
         
         col_def = {
             "name": display_name,
@@ -245,7 +254,7 @@ def build_liss_table(df):
     style_cell_conditional = [
         {"if": {"column_id": "Tz.Nr."}, "width": "60px", "textAlign": "center"},
         {"if": {"column_id": "Sp.Nr."}, "width": "120px", "textAlign": "left"},
-        {"if": {"column_id": "Tz.Nr. (Kopie)"}, "width": "80px", "textAlign": "center"},
+        {"if": {"column_id": "Tz.Nr.  "}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "LISS"}, "width": "80px", "textAlign": "center"},
         {"if": {"column_id": "Spez. Antigen"}, "width": "150px", "textAlign": "left"},
     ]
@@ -260,6 +269,16 @@ def build_liss_table(df):
         } for col in ANTIGEN_COLUMNS
     ])
     
+    # FIXED: Ensure antigen headers have consistent light blue background across entire cell
+    style_header_conditional = []
+    for col in ANTIGEN_COLUMNS:
+        style_header_conditional.append({
+            "if": {"column_id": col},
+            "backgroundColor": "#e3f2fd !important",
+            "color": "#1976d2 !important",
+            "fontWeight": "bold !important"
+        })
+    
     return dash_table.DataTable(
         id="data-table",
         columns=columns,
@@ -269,6 +288,7 @@ def build_liss_table(df):
         style_table={"maxWidth": "1100px", "margin": "0", "overflowX": "auto"},
         style_cell={"textAlign": "center", "height": "35px"},
         style_header={"backgroundColor": "#f8f9fa", "fontWeight": "bold"},
+        style_header_conditional=style_header_conditional,
         style_cell_conditional=style_cell_conditional,
         page_size=15
     )
@@ -303,7 +323,7 @@ def build_analysis_table(df, status_map, exclusion_reasons, system_excluded):
             style_data_conditional.append({
                 "if": {"column_id": col},
                 "backgroundColor": STATUS_COLORS.get(status, "#ffffff"),
-                "color": "#000000" if status != "Ausgestrichen" else "#ffffff"
+                "color": "#000000" if status != "Ausgeschlossen" else "#ffffff"
             })
     
     # Style antigen headers with light blue background
@@ -519,7 +539,7 @@ def get_step2_layout(df, status_map, exclusion_reasons, system_excluded, manual_
                 html.Li("Hellgrün: Bestätigt (2x +)"),
                 html.Li("Gelb: Nicht ausgeschlossen"),
                 html.Li("Grau: Keine Reaktion"),
-                html.Li("Rot: Ausgestrichen (Antigen wird ausgeschlossen)")
+                html.Li("Rot: Ausgeschlossen (Antigen wird ausgeschlossen)")
             ])
         ], className="tooltip-content")
     ], className="tooltip")

@@ -9,6 +9,16 @@ D,C,E,c,e,CW,K,k,Kpa,Kpb,Jsa,Jsb,Fya,Fyb,Jka,Jkb,Lea,Leb,P1,M,N,S,s,Lua,Lub,Xga
 
 
 
+
+Schritt 2: Antikörper 3x bestätigit anstatt vorhanden
+
+schritt4 labortechnischem bericht: bei labortechnischem bericht dies ebenfalls einfügen:
+3+ Antikörper vorhanden: Anti-D, Anti-Jkᵇ, Anti-M
+
+2+ Antikörper vorhanden: Anti-E, Anti-Kpᵃ, Anti-Leᵃ, Anti-Luᵃ
+
+Anzahl getesteter Spender: 11 -> wegnehmen
+
 =============================================================
 generell;
 uppercase A -> a
