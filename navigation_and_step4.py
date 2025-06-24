@@ -60,11 +60,169 @@ def format_antigen(antigen: str) -> str:  # noqa: D401 – simple function
     return f"{prefix}{formatted_char}"
 
 def format_antigen_for_pdf(antigen: str) -> str:
-    """Format antigen for PDF - use plain text since PDF can't handle Unicode superscripts reliably."""
-    # For PDF, we'll use simpler formatting that's more reliable
+    """Format antigen for PDF with proper Unicode superscripts and subscripts"""
+    if len(antigen) <= 1:
+        return antigen
+    
+    # Special case for P1 - should be P₁ (subscript 1)
     if antigen == "P1":
-        return "P1"  # Keep as is for PDF
-    return antigen  # For PDF, keep original format
+        return "P₁"
+    
+    # For other antigens, apply superscript formatting
+    prefix = antigen[:-1]
+    last_char = antigen[-1]
+    
+    # Use actual Unicode superscripts for better PDF rendering
+    superscript_map = {
+        "a": "ᵃ", "b": "ᵇ", "c": "ᶜ", "d": "ᵈ", "e": "ᵉ", "f": "ᶠ", "g": "ᵍ",
+        "h": "ʰ", "i": "ⁱ", "j": "ʲ", "k": "ᵏ", "l": "ˡ", "m": "ᵐ", "n": "ⁿ",
+        "o": "ᵒ", "p": "ᵖ", "r": "ʳ", "s": "ˢ", "t": "ᵗ", "u": "ᵘ", "v": "ᵛ",
+        "w": "ʷ", "x": "ˣ", "y": "ʸ", "z": "ᶻ"
+    }
+    
+    formatted_char = superscript_map.get(last_char.lower(), last_char)
+    return f"{prefix}{formatted_char}"
+
+# 2. FIXED: Updated PDF generation with proper antigen formatting
+def generate_pdf_report_fixed(
+    df: pd.DataFrame,
+    status_map: dict,
+    exclusion_reasons: dict,
+    user_selections: list,
+    *,
+    lot_number: str = "",
+) -> bytes:
+    """Generate a PDF representation of the report with proper antigen formatting."""
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    story = []
+
+    styles = getSampleStyleSheet()
+
+    # Title
+    story.append(
+        Paragraph(
+            "Antigen Analyse Bericht",
+            ParagraphStyle(
+                "CustomTitle",
+                parent=styles["Heading1"],
+                fontSize=24,
+                textColor=colors.HexColor("#145da0"),
+                spaceAfter=30,
+            ),
+        )
+    )
+
+    # Header table with lot number
+    header_data = [
+        ["Datum:", f"{datetime.now():%d.%m.%Y}"],
+        ["Uhrzeit:", f"{datetime.now():%H:%M}"],
+        ["Benutzer:", "Labor"],
+        ["Lot-Nr.:", lot_number or "Nicht angegeben"],
+    ]
+    tbl = Table(header_data, colWidths=[3 * cm, 6 * cm])
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("TEXTCOLOR", (0, 0), (0, -1), colors.HexColor("#145da0")),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ]
+        )
+    )
+    story.extend([tbl, Spacer(1, 20)])
+
+    # FIXED: Medical section with distinct 3x and 2x findings, properly formatted
+    story.append(Paragraph("Medizinischer Bericht", styles["Heading2"]))
+
+    sorted_selections = sort_antigens(user_selections)
+    confirmed_3x = [ag for ag in sorted_selections if "Bestätigt (3x +)" in status_map.get(ag, "")]
+    confirmed_2x = [ag for ag in sorted_selections if "Bestätigt (2x +)" in status_map.get(ag, "")]
+
+    # FIXED: Updated text to use "bestätigt" instead of "vorhanden"
+    if confirmed_3x:
+        formatted_3x = [f"Anti-{format_antigen_for_pdf(ag)}" for ag in confirmed_3x]
+        antibody_3x_text = "3× Antikörper bestätigt: " + ", ".join(formatted_3x)
+        story.append(Paragraph(antibody_3x_text, styles["Normal"]))
+    
+    if confirmed_2x:
+        formatted_2x = [f"Anti-{format_antigen_for_pdf(ag)}" for ag in confirmed_2x]
+        antibody_2x_text = "2× Antikörper bestätigt: " + ", ".join(formatted_2x)
+        story.append(Paragraph(antibody_2x_text, styles["Normal"]))
+
+    if not confirmed_3x and not confirmed_2x:
+        story.append(Paragraph("Keine Antikörper nachgewiesen", styles["Normal"]))
+
+    story.append(Spacer(1, 20))
+
+    # FIXED: Add labortechnischer bericht section with antibody summary and no donor count
+    story.append(Paragraph("Labortechnischer Bericht", styles["Heading2"]))
+    
+    # Add same antibody summary
+    if confirmed_3x:
+        formatted_3x = [f"Anti-{format_antigen_for_pdf(ag)}" for ag in confirmed_3x]
+        antibody_3x_text = "3× Antikörper bestätigt: " + ", ".join(formatted_3x)
+        story.append(Paragraph(antibody_3x_text, styles["Normal"]))
+    
+    if confirmed_2x:
+        formatted_2x = [f"Anti-{format_antigen_for_pdf(ag)}" for ag in confirmed_2x]
+        antibody_2x_text = "2× Antikörper bestätigt: " + ", ".join(formatted_2x)
+        story.append(Paragraph(antibody_2x_text, styles["Normal"]))
+    
+    # REMOVED: "Anzahl getesteter Spender" line as requested
+    
+    story.append(Spacer(1, 20))
+
+    # FIXED: Add reaction table to PDF with proper formatting
+    story.append(Paragraph("Antigen-Reaktionstabelle", styles["Heading3"]))
+    
+    # Build table data for PDF with proper antigen formatting
+    positive_liss_values = {"+/-", "1+", "2+", "3+", "4+"}
+    table_data = []
+    
+    # Header row with properly formatted antigen names using format_antigen_for_pdf
+    header_row = [" ", "Sp.Nr.", "LISS"]  # FIXED: Use single space for Tz.Nr. column
+    header_row.extend([format_antigen_for_pdf(ag) for ag in sorted_selections])
+    table_data.append(header_row)
+    
+    # Data rows
+    for _, row in df.iterrows():
+        liss_val = row.get("LISS", "-")
+        if liss_val not in positive_liss_values:
+            continue
+            
+        data_row = [
+            str(row.get("Tz.Nr.", "")),
+            str(row.get("Sp.Nr.", "")),
+            str(liss_val)
+        ]
+        data_row.extend([str(row.get(ag, "")) for ag in sorted_selections])
+        table_data.append(data_row)
+    
+    if len(table_data) > 1:  # If we have data beyond the header
+        pdf_table = Table(table_data)
+        pdf_table.setStyle(
+            TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 8),
+                ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE", (0, 1), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                ("GRID", (0, 0), (-1, -1), 1, colors.black),
+            ])
+        )
+        story.append(pdf_table)
+
+    story.append(Spacer(1, 20))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 def sort_antigens(antigen_list):
     """Sort antigens according to the predefined order."""

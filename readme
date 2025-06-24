@@ -393,60 +393,143 @@ Column headers should have a light-blue background to match the theme.
 4.2 table 2 still not properly aligned with D to Xga bericht still not uper or lowercase
 =============================================================================================
 
-buggs : cant go back to step 1 when in step 2 error:
 
-line 1074, in go_back_to_step1
-return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
-File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
-html.Div(id="step1-table-container", children=[build_liss_table(df)]),
-File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
-df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
-File "/home/augusut/miniconda3/envs/ba/lib/python3.9/site-packages/pandas/core/frame.py", line 5158, in insert
-raise ValueError(f"cannot insert {column}, already exists")
-cant go back to step 1 when in step two
-Traceback (most recent call last):
-  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 1074, in go_back_to_step1
-    return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
-  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
-    html.Div(id="step1-table-container", children=[build_liss_table(df)]),
-  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
-    df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
-  File "/home/augusut/miniconda3/envs/ba/lib/python3.9/site-packages/pandas/core/frame.py", line 5158, in insert
-    raise ValueError(f"cannot insert {column}, already exists")
+---
+
+**🛠️ PROMPT: Bug Fixes, Consistency Edits & Preparation for Future AI Features (v3.2+)**
+
+You are a **senior Dash/Python developer**.
+Please apply the following critical fixes, terminology corrections, report enhancements and prepare the codebase for upcoming modular extensions.
+
+---
+
+### 🐛 CRITICAL BUG – Can’t go back to Step 1
+
+* When trying to navigate back from Step 2 → Step 1, this error is thrown:
+
+```plaintext
 ValueError: cannot insert Tz.Nr. (Kopie), already exists
-return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
-File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
-html.Div(id="step1-table-container", children=[build_liss_table(df)]),
-File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
-df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
-Traceback (most recent call last):
-  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 1074, in go_back_to_step1
-    return [get_step1_layout(df), get_header_with_navigation(1, step_states), 1]
-  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 494, in get_step1_layout
-    html.Div(id="step1-table-container", children=[build_liss_table(df)]),
-  File "/home/augusut/Documents/ADLS ZHAW/Semester 6/BaA/BaA_Code/main.py", line 219, in build_liss_table
-    df.insert(liss_idx + 1, "Tz.Nr. (Kopie)", row_index)
-  File "/home/augusut/miniconda3/envs/ba/lib/python3.9/site-packages/pandas/core/frame.py", line 5158, in insert
-    raise ValueError(f"cannot insert {column}, already exists")
-ValueError: cannot insert Tz.Nr. (Kopie), already exists
+```
 
+#### 🔧 Fix:
 
+* In `build_liss_table()`, before calling `df.insert(...)`, check:
 
-Generell überall im GUI auf fachliche korrektheit und uniform schauen zb überall ausgestrichen mit ausgeschlossen ersetzte (da ausgeschlossen fachtecnisch korrekter ist)
-und auch dass überall der gliche begriff verwendet wird zb nicht igendwo ausgeschlossen und ausgestrichen für das gleiche
+```python
+if "Tz.Nr.  " not in df.columns:
+    df.insert(liss_idx + 1, "Tz.Nr.  ", row_index)
+```
 
-Schritt 2: Antikörper 3x bestätigit anstatt vorhanden
+This prevents double insertion of the temporary helper column.
 
-schritt4 labortechnischem bericht: bei labortechnischem bericht dies ebenfalls einfügen:
-"3+ Antikörper vorhanden: Anti-D, Anti-Jkᵇ, Anti-M
-2+ Antikörper vorhanden: Anti-E, Anti-Kpᵃ, Anti-Leᵃ, Anti-Luᵃ"
+---
 
-Anzahl getesteter Spender: 11 -> wegnehmen bei schritt 'bericht' im labortechnischem bericht.
+### 🔤 TERMINOLOGY UNIFICATION (Domain-Correct Language)
 
+* Replace **“ausgestrichen”** everywhere in GUI with the correct term **“ausgeschlossen”**
+* Review all captions, explanations, labels, tooltips and ensure **uniform terminology** throughout (no mixed usage)
 
+---
 
-Tz. Nr. mit ' ' ersetzten also wenn möglich mit empty string für jede einzelne tabelle wo es vorkommt
-Tz. Nr. (kopie) auch ersetten aber das es ja nicht gleich ein darf möglicherweise mit '  ' dppeltem leerschlag ersetzten -> ebenfalls überall im code wo es vorkommt
-bei allen spaltentiteln 
+### 🧾 STEP 2 – Text Correction
 
-Bei jeder Tabelle wird nicht der gesamte spaltentitel hellblau markirt bitte behebe dies ebenfalls sodass bei jeder tabelle der gesamte spalten titel markiert wirds
+* Change “3+ Antikörper **vorhanden**” → **“3× Antikörper bestätigt”**
+  Same for 2× etc.
+* Use this improved wording throughout the analysis summary
+
+---
+
+### 📄 STEP 4 – Labortechnischer Bericht: Additions
+
+* Insert the same **3+ / 2+ Antikörper summary** as in the medizinischer Bericht:
+
+```
+3× Antikörper bestätigt: Anti-D, Anti-Jkᵇ, Anti-M  
+2× Antikörper bestätigt: Anti-E, Anti-Kpᵃ, Anti-Leᵃ, Anti-Luᵃ
+```
+
+* Remove the line: **“Anzahl getesteter Spender: 11”** from the labortechnischer Bericht.
+
+---
+
+### 🧱 COLUMN NAMES & UI CLEANUP
+
+1. **Tz. Nr.**:
+
+   * Change label to a single space `' '` in **all tables**
+   * Temporary copy version → use double space `'  '` to prevent conflicts
+
+2. Ensure **column headers** (especially antigen columns) have:
+
+   * **Consistent light blue background** applied across the **entire cell**, not just partially
+   * Fix this in **Step 1, 2, 3, and Step 4 reports**
+
+---
+
+### 📄 PDF REPORT ISSUES
+
+* Antikörper names in PDFs still lack proper formatting (e.g. `Lea` instead of `Leᵃ`)
+* Apply `format_antigen()` in **both medizinischer** and **labortechnischer Bericht**
+* Ensure:
+
+  * Superscripts (`ᵃ`, `ᵇ`)
+  * Subscript for P₁
+  * Proper fixed antigen order
+
+📝 If this is not supported by current PDF renderer (e.g. `reportlab`), consider:
+
+* Switching to **WeasyPrint** or another HTML-to-PDF renderer that supports Unicode superscripts
+
+---
+
+### 🧱 ARCHITECTURAL PREP – For Future Features
+
+The following two features will be added next — please make sure the structure is **clean, modular, and expandable** now:
+
+#### 🔮 1. **Text-based Table Reader**
+
+* A module to auto-read printed tables (OCR or structured text extraction)
+* Output: clean DataFrame → handed to downstream evaluation logic
+
+**Prep needed now:**
+
+* Create placeholder function: `parse_table_from_text(uploaded_text)`
+  → Returns a preformatted `df`
+
+#### 🧪 2. **CNN-based Reaktionküvetten Interpreter**
+
+* A CNN model will evaluate image inputs and classify reaction strength (e.g., `+`, `2+`, `±`, `0`)
+
+**Prep needed now:**
+
+* Add stub pipeline:
+
+  ```python
+  def analyze_reaction_image(image) -> str:
+      # Returns a reaction symbol like '+', '2+', '±', or '0'
+      return "stub"
+  ```
+
+* Structure `main.py` so this pipeline is pluggable later:
+
+  * e.g., all image logic inside `cnn_analysis/` module
+  * inference output merges with same column format as manual entry
+
+---
+
+### ✅ Summary of Action Items
+
+| Area     | Task                                                                |
+| -------- | ------------------------------------------------------------------- |
+| Step Nav | Prevent duplicate column insert in Step 1 toggle logic              |
+| Language | Replace all “ausgestrichen” → “ausgeschlossen”; unify all wording   |
+| Step 2   | Wording update: “3× Antikörper bestätigt”                           |
+| Step 4   | Add antibody summary to lab report; remove donor count              |
+| Columns  | Rename `Tz. Nr.` to `' '` and `'  '` variant for helper columns     |
+| Tables   | Fix light-blue header full-cell coloring in all views               |
+| PDF      | Apply `format_antigen()` in all export locations (superscripts etc) |
+| Future   | Prepare modular stubs for table text reader & CNN image input       |
+
+---
+
+Let me know if you'd like these items broken into `TODO` functions or GitHub issues.
