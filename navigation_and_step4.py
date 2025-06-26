@@ -1,11 +1,9 @@
 # navigation_and_step4.py - FIXED VERSION
 
 from __future__ import annotations
-
 import io
 from datetime import datetime
 from typing import Iterable, Mapping, Sequence
-
 import dash
 import pandas as pd
 from dash import dcc, html, dash_table
